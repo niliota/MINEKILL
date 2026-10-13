@@ -2026,3 +2026,5 @@ happened to make their first sample in a real level.
 false (collision and world drawing wait); (2) `_ukBasisCached` resets on every anchor and on
 player re-acquire, so each level samples its own; (3) ApplyRotations warnings rate-limited
 (1 per 600) and report which reference is null and whether NewMovement.Instance is our player.
+
+User confirmed: world upright again, particles and clicks work.
