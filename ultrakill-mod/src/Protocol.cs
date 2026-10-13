@@ -7,9 +7,9 @@ namespace UltraCraft.Bridge
     public static class Protocol
     {
         public const uint MAGIC = 0x55544C52u;
-        public const uint VERSION = 604791699u;   // layout fingerprint
+        public const uint VERSION = 1764501406u;   // layout fingerprint
         public const int HEADER_SIZE = 56;
-        public const int TOTAL_SIZE = 1659384;
+        public const int TOTAL_SIZE = 3035640;
         public const int SEQ_SIZE = 4;
 
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -298,9 +298,9 @@ namespace UltraCraft.Bridge
         public const int TBL_HAND_REC_OFF_V = 16;
         public const int TBL_HAND_REC_OFF_RGBA = 20;  // colour with lighting applied, r in the low byte
         public const int TBL_HAND_REC_OFF_TEX = 24;  // GUI_TEX_* key
-        public const int TBL_WORLD_MODELS_OFFSET = 1126872;  // Minecraft -> ULTRAKILL: posed model geometry in the world this frame (the player in third person, block-breaking cracks), unlit, in Minecraft block coords
-        public const int TBL_WORLD_MODELS_SIZE = 458768;
-        public const int TBL_WORLD_MODELS_CAPACITY = 16384;
+        public const int TBL_WORLD_MODELS_OFFSET = 1126872;  // Minecraft -> ULTRAKILL: posed model geometry in the world this frame (entities, block entities, the player in third person, block-breaking cracks), unlit, in Minecraft block coords
+        public const int TBL_WORLD_MODELS_SIZE = 1835024;
+        public const int TBL_WORLD_MODELS_CAPACITY = 65536;
         public const int TBL_WORLD_MODELS_OFF_SEQ = 0;  // seqlock, odd while writing
         public const int TBL_WORLD_MODELS_OFF_TICKTIMESTAMP = 4;  // epoch ms of the frame
         public const int TBL_WORLD_MODELS_OFF_COUNT = 12;  // valid vertices; 4 per quad, counter-clockwise front as in Minecraft
@@ -313,7 +313,7 @@ namespace UltraCraft.Bridge
         public const int TBL_WORLD_MODELS_REC_OFF_V = 16;
         public const int TBL_WORLD_MODELS_REC_OFF_RGBA = 20;  // tint, r in the low byte
         public const int TBL_WORLD_MODELS_REC_OFF_TEX = 24;  // GUI_TEX_* key
-        public const int TBL_PARTICLES_OFFSET = 1585640;  // Minecraft -> ULTRAKILL: Minecraft's live block particles (TerrainParticle), interpolated, for ULTRAKILL to draw as billboards
+        public const int TBL_PARTICLES_OFFSET = 2961896;  // Minecraft -> ULTRAKILL: Minecraft's live block particles (TerrainParticle), interpolated, for ULTRAKILL to draw as billboards
         public const int TBL_PARTICLES_SIZE = 73744;
         public const int TBL_PARTICLES_CAPACITY = 2048;
         public const int TBL_PARTICLES_OFF_SEQ = 0;  // seqlock, odd while writing

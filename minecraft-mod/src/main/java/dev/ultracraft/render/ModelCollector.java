@@ -288,7 +288,43 @@ public final class ModelCollector implements SubmitNodeCollector {
     @Override public void submitLeash(PoseStack p, net.minecraft.client.renderer.entity.state.EntityRenderState.LeashState s) {}
     @Override public <S> void submitCrumblingOverlay(Model<? super S> model, S s, PoseStack p, RenderType t, int a, int b, int c, net.minecraft.client.renderer.feature.ModelFeatureRenderer.CrumblingOverlay o) {}
     @Override public void submitMovingBlock(PoseStack p, net.minecraft.client.renderer.block.MovingBlockRenderState s, int i) {}
-    @Override public void submitBlockModel(PoseStack p, RenderType t, java.util.List<net.minecraft.client.renderer.block.dispatch.BlockStateModelPart> parts, int[] tints, int a, int b, int c) {}
+    /** Whole block models (falling blocks, TNT, minecart contents, held blocks of endermen). */
+    @Override
+    public void submitBlockModel(PoseStack poseStack, RenderType t, java.util.List<net.minecraft.client.renderer.block.dispatch.BlockStateModelPart> parts,
+                                 int[] tints, int light, int overlay, int outline) {
+        PoseStack.Pose pose = poseStack.last();
+        Matrix4f m = pose.pose();
+        float bright = brightness(light);
+        Vector3f p = new Vector3f(), n = new Vector3f();
+        net.minecraft.core.Direction[] dirs = net.minecraft.core.Direction.values();
+        for (var part : parts) {
+            for (int d = 0; d <= dirs.length; d++) {
+                for (BakedQuad bq : part.getQuads(d < dirs.length ? dirs[d] : null)) {
+                    Quad q = new Quad();
+                    float depth = 0;
+                    for (int k = 0; k < 4; k++) {
+                        var pos = bq.position(k);
+                        m.transformPosition(pos.x(), pos.y(), pos.z(), p);
+                        post.transformPosition(p);
+                        q.x[k] = p.x; q.y[k] = p.y; q.z[k] = p.z;
+                        depth += p.z;
+                        long uv = bq.packedUV(k);
+                        q.u[k] = UVPair.unpackU(uv); q.v[k] = UVPair.unpackV(uv);
+                    }
+                    q.depth = depth / 4f;
+                    int col = 0xFFFFFFFF;
+                    var info = bq.materialInfo();
+                    if (info.isTinted() && tints != null && info.tintIndex() >= 0 && info.tintIndex() < tints.length) {
+                        col = 0xFF000000 | argbToRgba(tints[info.tintIndex()]);
+                    }
+                    pose.transformNormal(bq.direction().getUnitVec3f(), n);
+                    q.rgba = scale(col, shade(n.x, n.y, n.z) * bright);
+                    q.tex = Protocol.GUI_TEX_BLOCKS;
+                    add(q);
+                }
+            }
+        }
+    }
     @Override public void submitBreakingBlockModel(PoseStack p, java.util.List<net.minecraft.client.renderer.block.dispatch.BlockStateModelPart> parts, int i, boolean b) {}
     @Override public void submitShapeOutline(PoseStack p, net.minecraft.world.phys.shapes.VoxelShape s, RenderType t, int i, float f, boolean b) {}
     @Override public void submitCustomGeometry(PoseStack p, RenderType t, SubmitNodeCollector.CustomGeometryRenderer r) {}
