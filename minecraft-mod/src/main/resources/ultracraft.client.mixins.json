@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.ultracraft.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "MinecraftMixin",
+    "WindowMixin",
+    "MouseHandlerMixin",
+    "EntityCollisionMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
