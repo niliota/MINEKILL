@@ -1,6 +1,10 @@
-# MINEKILL — MODLOG
+# MINEKILL — development log
 
-Running log. Newest at the bottom. Not game-derived content — safe to commit.
+The project's history, round by round, oldest first: what the owner reported after each
+playtest, what was found, what changed and what was confirmed. It is kept as written, so early
+entries describe plans and designs that were later replaced (the project was called UltraCraft
+until 2026-10-14; ULTRAKILL movement and voxelised levels were dropped). For the current state,
+read `HANDOVER.md` and `CONTRACT.md`.
 
 ## 2026-10-08 — Project start
 
@@ -2425,3 +2429,18 @@ keep that name. The old-named jar and DLL were removed from the game folders whe
 went in (both loading at once would double every hook).
 
 User confirmed: everything works after the rename.
+
+### Repository overhaul for publishing; native Windows support; GPL-3.0
+
+- README rewritten for players (features, requirements, platforms, install, controls,
+  configuration, building, troubleshooting, credits, license). HANDOVER, CONTRACT, SETUP and LEGAL
+  rewritten to the current state; this log gained an introduction and is otherwise kept as is.
+- LICENSE: GPL-3.0 (the SPDX text of GPL-3.0-only); fabric.mod.json license, author and source
+  link updated.
+- Native Windows: neither side worked there. Minecraft would have used `C:\var\tmp\...` and
+  ULTRAKILL a path relative to its working folder (and a Z: drive is not proof of Wine), and
+  ULTRAKILL's `CreateFromFile(path)` opens the file exclusively, which fails while Minecraft has it
+  mapped. Now: both sides default to `%LOCALAPPDATA%\MINEKILL\minekill.bridge` on Windows; Wine is
+  detected through ntdll's `wine_get_version` export (`Platform.IsWine`); on Windows the file is
+  opened shared (ReadWrite|Delete) and mapped through that handle (`Platform.MapShared`); under
+  Wine the old path is unchanged. Untested on Windows.
