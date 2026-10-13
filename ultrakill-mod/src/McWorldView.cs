@@ -72,6 +72,15 @@ namespace UltraCraft
         private readonly Dictionary<long, GameObject> _sections = new Dictionary<long, GameObject>();
         private int _sectionsReceived;
 
+        // Minecraft's block particles (PARTICLES table), camera-facing quads in world space.
+        private GameObject _particles;
+        private Mesh _particleMesh;
+        private readonly byte[] _particleBytes = new byte[Protocol.TBL_PARTICLES_CAPACITY * Protocol.TBL_PARTICLES_RECORD_SIZE];
+        private readonly List<Vector3> _pv = new List<Vector3>();
+        private readonly List<Vector2> _puv = new List<Vector2>();
+        private readonly List<Color32> _pc = new List<Color32>();
+        private readonly List<int> _pt = new List<int>();
+
         // Minecraft's block outline (SELECTION slot), drawn as lines under the root.
         private GameObject _outline;
         private Mesh _outlineMesh;
@@ -303,6 +312,78 @@ namespace UltraCraft
             mr.shadowCastingMode = ShadowCastingMode.Off;
             mr.receiveShadows = false;
             _outline.SetActive(false);
+        }
+
+        /// <summary>
+        /// Every frame after the camera is placed: Minecraft's block particles as billboards.
+        /// Minecraft simulates them; this only draws the snapshot. Built in world space (each
+        /// centre mapped through the root) so the quads face ULTRAKILL's real camera; the size is
+        /// Minecraft's half-size times the map's scale. Same atlas and cutout material as blocks.
+        /// </summary>
+        public void LateTick()
+        {
+            if (!_root.activeSelf || _atlas == null) { if (_particles != null) _particles.SetActive(false); return; }
+            int n = _bridge.ReadParticleTable(_particleBytes);
+            if (n < 0) return;                                // writer busy: keep last frame's
+            if (_particles == null) CreateParticles();
+            if (n == 0) { _particles.SetActive(false); return; }
+
+            Camera cam = _puppet.UkCamera != null ? _puppet.UkCamera : Camera.main;
+            if (cam == null) return;
+            Vector3 right = cam.transform.right, up = cam.transform.up;
+            float scale = Mathf.Abs(_root.transform.lossyScale.y);
+            _pv.Clear(); _puv.Clear(); _pc.Clear(); _pt.Clear();
+            for (int i = 0; i < n; i++)
+            {
+                int o = i * Protocol.TBL_PARTICLES_RECORD_SIZE;
+                Vector3 c = _root.transform.TransformPoint(new Vector3(
+                    BitConverter.ToSingle(_particleBytes, o + Protocol.TBL_PARTICLES_REC_OFF_X),
+                    BitConverter.ToSingle(_particleBytes, o + Protocol.TBL_PARTICLES_REC_OFF_Y),
+                    BitConverter.ToSingle(_particleBytes, o + Protocol.TBL_PARTICLES_REC_OFF_Z)));
+                float s = BitConverter.ToSingle(_particleBytes, o + Protocol.TBL_PARTICLES_REC_OFF_SIZE) * scale;
+                float u0 = BitConverter.ToSingle(_particleBytes, o + Protocol.TBL_PARTICLES_REC_OFF_U0);
+                float v0 = BitConverter.ToSingle(_particleBytes, o + Protocol.TBL_PARTICLES_REC_OFF_V0);
+                float u1 = BitConverter.ToSingle(_particleBytes, o + Protocol.TBL_PARTICLES_REC_OFF_U1);
+                float v1 = BitConverter.ToSingle(_particleBytes, o + Protocol.TBL_PARTICLES_REC_OFF_V1);
+                int k = o + Protocol.TBL_PARTICLES_REC_OFF_RGBA;
+                var col = new Color32(_particleBytes[k], _particleBytes[k + 1], _particleBytes[k + 2], _particleBytes[k + 3]);
+                Vector3 r = right * s, u = up * s;
+                int b = _pv.Count;
+                // Clockwise as the camera sees it (Unity's front face). Minecraft's v grows
+                // downward and the atlas is loaded unflipped, so the top edge takes v0.
+                _pv.Add(c - r - u); _puv.Add(new Vector2(u0, v1));
+                _pv.Add(c - r + u); _puv.Add(new Vector2(u0, v0));
+                _pv.Add(c + r + u); _puv.Add(new Vector2(u1, v0));
+                _pv.Add(c + r - u); _puv.Add(new Vector2(u1, v1));
+                for (int q = 0; q < 4; q++) _pc.Add(col);
+                _pt.Add(b); _pt.Add(b + 1); _pt.Add(b + 2);
+                _pt.Add(b); _pt.Add(b + 2); _pt.Add(b + 3);
+            }
+            _particleMesh.Clear();
+            _particleMesh.SetVertices(_pv);
+            _particleMesh.SetUVs(0, _puv);
+            _particleMesh.SetColors(_pc);
+            _particleMesh.SetTriangles(_pt, 0);
+            _particleMesh.RecalculateNormals();
+            _particleMesh.RecalculateBounds();
+            var mr = _particles.GetComponent<MeshRenderer>();
+            Material m = _mats[Cutout] != null ? _mats[Cutout] : _fallback;
+            if (mr.sharedMaterial != m) mr.sharedMaterial = m;
+            if (!_particles.activeSelf) _particles.SetActive(true);
+        }
+
+        private void CreateParticles()
+        {
+            _particleMesh = new Mesh { name = "UltraCraft.Particles", hideFlags = HideFlags.HideAndDontSave };
+            _particleMesh.MarkDynamic();
+            _particles = new GameObject("UltraCraft.Particles") { hideFlags = HideFlags.HideAndDontSave, layer = RenderLayer };
+            _particles.AddComponent<MeshFilter>().sharedMesh = _particleMesh;
+            var mr = _particles.AddComponent<MeshRenderer>();
+            EnsureFallback();
+            mr.sharedMaterial = _fallback;
+            mr.shadowCastingMode = ShadowCastingMode.Off;
+            mr.receiveShadows = false;
+            _particles.SetActive(false);
         }
 
         private void EnsureFallback()

@@ -9,7 +9,7 @@ namespace UltraCraft.Bridge
         public const uint MAGIC = 0x55544C52u;
         public const uint VERSION = 1u;
         public const int HEADER_SIZE = 56;
-        public const int TOTAL_SIZE = 110968;
+        public const int TOTAL_SIZE = 184712;
         public const int SEQ_SIZE = 4;
 
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -242,6 +242,23 @@ namespace UltraCraft.Bridge
         public const int TBL_COLLISION_REC_OFF_MAXX = 12;
         public const int TBL_COLLISION_REC_OFF_MAXY = 16;
         public const int TBL_COLLISION_REC_OFF_MAXZ = 20;
+        public const int TBL_PARTICLES_OFFSET = 110968;  // Minecraft -> ULTRAKILL: Minecraft's live block particles (TerrainParticle), interpolated, for ULTRAKILL to draw as billboards
+        public const int TBL_PARTICLES_SIZE = 73744;
+        public const int TBL_PARTICLES_CAPACITY = 2048;
+        public const int TBL_PARTICLES_OFF_SEQ = 0;  // seqlock, odd while writing
+        public const int TBL_PARTICLES_OFF_TICKTIMESTAMP = 4;  // epoch ms of the frame that sampled them
+        public const int TBL_PARTICLES_OFF_COUNT = 12;  // valid records, <= capacity
+        public const int TBL_PARTICLES_OFF_RECORDS = 16;
+        public const int TBL_PARTICLES_RECORD_SIZE = 36;
+        public const int TBL_PARTICLES_REC_OFF_X = 0;  // Minecraft block coords, particle centre
+        public const int TBL_PARTICLES_REC_OFF_Y = 4;
+        public const int TBL_PARTICLES_REC_OFF_Z = 8;
+        public const int TBL_PARTICLES_REC_OFF_SIZE = 12;  // half-size of the quad, blocks
+        public const int TBL_PARTICLES_REC_OFF_U0 = 16;  // block-atlas UV rectangle
+        public const int TBL_PARTICLES_REC_OFF_V0 = 20;
+        public const int TBL_PARTICLES_REC_OFF_U1 = 24;
+        public const int TBL_PARTICLES_REC_OFF_V1 = 28;
+        public const int TBL_PARTICLES_REC_OFF_RGBA = 32;  // colour, r in the low byte
 
         // Key bit flags carried by SLOT_INPUT, shared with the Java side.
         public const uint KEY_FORWARD = 1u;

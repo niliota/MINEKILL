@@ -6,7 +6,7 @@ public final class Protocol {
     public static final int MAGIC = 0x55544C52;
     public static final int VERSION = 1;
     public static final int HEADER_SIZE = 56;
-    public static final int TOTAL_SIZE = 110968;
+    public static final int TOTAL_SIZE = 184712;
     public static final int SEQ_SIZE = 4;
 
     public static final int FLAG_UK_MOVEMENT = 1;
@@ -291,6 +291,23 @@ public final class Protocol {
     public static final int TBL_COLLISION_REC_OFF_MAXX = 12;
     public static final int TBL_COLLISION_REC_OFF_MAXY = 16;
     public static final int TBL_COLLISION_REC_OFF_MAXZ = 20;
+    public static final int TBL_PARTICLES_OFFSET = 110968;  // Minecraft -> ULTRAKILL: Minecraft's live block particles (TerrainParticle), interpolated, for ULTRAKILL to draw as billboards
+    public static final int TBL_PARTICLES_SIZE = 73744;
+    public static final int TBL_PARTICLES_CAPACITY = 2048;
+    public static final int TBL_PARTICLES_OFF_SEQ = 0;  // seqlock, odd while writing
+    public static final int TBL_PARTICLES_OFF_TICKTIMESTAMP = 4;  // epoch ms of the frame that sampled them
+    public static final int TBL_PARTICLES_OFF_COUNT = 12;  // valid records, <= capacity
+    public static final int TBL_PARTICLES_OFF_RECORDS = 16;
+    public static final int TBL_PARTICLES_RECORD_SIZE = 36;
+    public static final int TBL_PARTICLES_REC_OFF_X = 0;  // Minecraft block coords, particle centre
+    public static final int TBL_PARTICLES_REC_OFF_Y = 4;
+    public static final int TBL_PARTICLES_REC_OFF_Z = 8;
+    public static final int TBL_PARTICLES_REC_OFF_SIZE = 12;  // half-size of the quad, blocks
+    public static final int TBL_PARTICLES_REC_OFF_U0 = 16;  // block-atlas UV rectangle
+    public static final int TBL_PARTICLES_REC_OFF_V0 = 20;
+    public static final int TBL_PARTICLES_REC_OFF_U1 = 24;
+    public static final int TBL_PARTICLES_REC_OFF_V1 = 28;
+    public static final int TBL_PARTICLES_REC_OFF_RGBA = 32;  // colour, r in the low byte
 
     // Key bit flags carried by SLOT_INPUT, shared with the C# side.
     public static final int KEY_FORWARD = 1;

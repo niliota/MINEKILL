@@ -32,8 +32,13 @@ final class InputApplier {
     private static final Logger LOG = LoggerFactory.getLogger(UltraCraftClient.MOD_ID);
 
     /** GLFW/LWJGL mouse button codes, which are also what Minecraft's own handlers use. */
-    private static final int MOUSE_LEFT = 0;
-    private static final int MOUSE_RIGHT = 1;
+    // Minecraft 26.3 numbers mouse buttons from 1 (InputConstants: LEFT = 1, MIDDLE = 2,
+    // RIGHT = 3), not GLFW's 0 = left, 1 = right. Hard-coding 0/1 made a forwarded LEFT press
+    // an unbound button 0 (no click; only the held state broke blocks, after 3-4 presses) and
+    // a forwarded RIGHT press a LEFT click (break-then-replace), measured 2026-10-13:
+    // "RMB=true ... clickCounter attack=1". Use Minecraft's own constants.
+    private static final int MOUSE_LEFT = com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT;
+    private static final int MOUSE_RIGHT = com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_RIGHT;
 
     private final Bridge bridge;
     private long lastApplied = -1;
@@ -94,8 +99,8 @@ final class InputApplier {
         //
         // Rather than poke at clickCount, the press is replayed through Minecraft's own
         // input entry point, MouseHandler.onButton(window, info, action). Verified from
-        // the 26.3 bytecode: it takes the same "window == 0 means no particular window"
-        // convention as onMove, it calls KeyMapping.click(), which increments clickCount
+        // the 26.3 bytecode: given Minecraft's real window handle (0 is rejected, see
+        // forwardButton), it calls KeyMapping.click(), which increments clickCount
         // for every mapping bound to that physical button, and therefore respects the
         // player's own keybinds instead of assuming left click is attack.
         //
@@ -154,7 +159,9 @@ final class InputApplier {
      * Feed a mouse delta to Minecraft.
      *
      * <p>Kept, but it is NOT what turns the camera. {@code onMove} ignores the event unless
-     * the window argument is 0 or matches its own handle, and then branches on whether the
+     * the window argument matches its own handle (0 is REJECTED: verified 2026-10-13, so
+     * the call below, which passes 0, is a no-op on purpose; giving it the real handle would
+     * make it accumulate on top of accumulateMouse and double the turning), and then branches on whether the
      * cursor is grabbed. In the branch we are always in, because we suppress the grab, it
      * does not accumulate the delta at all. It treats the argument as an ABSOLUTE cursor
      * position and differences it against a stored previous position:
@@ -259,12 +266,19 @@ final class InputApplier {
     /**
      * Replay a mouse button press or release through Minecraft's own input path.
      *
-     * <p>Window argument 0 means "no particular window", which is the convention
-     * {@code onMove} also uses and which the bytecode guard accepts.
+     * <p>MUST pass Minecraft's real window handle. Verified in the 26.3 bytecode (2026-10-13):
+     * {@code onButton} begins {@code if (window == 0) return; if (window != handle) return;}.
+     * This used to pass 0 under a comment claiming 0 meant "no particular window", so every
+     * replayed press was dropped on the first line: no {@code KeyMapping.click}, so
+     * {@code startAttack} (Creative's instant break) never ran. Only the separately set held
+     * state worked, which is why holding mined and a block broke after "exactly 3-4 clicks":
+     * each ~2-tick click let {@code continueAttack} count down Creative's 5-tick destroyDelay.
+     * Measured with a temporary click probe (since removed): destroyDelay 5 -> 3 -> 1 -> break,
+     * and no startAttack calls for forwarded presses.
      */
     private void forwardButton(Minecraft mc, int button, boolean pressed) {
         try {
-            mc.mouseHandler.onButton(0L, new MouseButtonInfo(button, 0), pressed ? 1 : 0);
+            mc.mouseHandler.onButton(mc.getWindow().handle(), new MouseButtonInfo(button, 0), pressed ? 1 : 0);
         } catch (Throwable t) {
             LOG.warn("[UltraCraft] mouse button {} forward failed: {}", button, t.toString());
         }

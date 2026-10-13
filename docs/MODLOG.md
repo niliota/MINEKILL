@@ -1918,3 +1918,111 @@ lowers the view). Logs once how far off the old camera was — the measurement.
 
 **Weapon HUD:** `HudController.weaponIcon` hidden on every HudController (rescanned every 120
 frames), re-asserted because ULTRAKILL toggles it from its HUD settings. Fist panel kept.
+
+---
+
+## 2026-10-13 — Playtest: aim fixed; "a block breaks after exactly 3-4 clicks" (measuring)
+
+User: aim now matches (and sneaking lowers the view, previously missing). Left click still
+fails: a block breaks only after exactly 3-4 presses, never another number.
+
+**Established by reading 26.3 bytecode (not yet measured):**
+- `MouseHandler.onButton`, no screen: grabMouse() (suppressed) then KeyMapping.set + click — presses arrive.
+- `Minecraft.startAttack`: early-outs are missTime > 0, null hit, hands busy, item disabled,
+  `cannotAttackWithItem` (only items with a MINIMUM_ATTACK_CHARGE component; blocks have none),
+  piercing weapons. BLOCK + not air -> `startDestroyBlock`.
+- `MultiPlayerGameMode.startDestroyBlock` with `abilities.instabuild` (Creative) destroys on the
+  client at once (prediction) and sends START_DESTROY; no gating.
+- Server `handleBlockBreakAction` rejects as "too far" / "too high" / "spawn protection" /
+  may-not-interact, reporting via `debugLogging`, which only prints with a debug flag.
+- World `New World (2)` level.dat: GameType 1 (Creative).
+
+So the 3-4 clicks are one of: click not reaching startAttack, server rejection restoring the
+block, or the mesh not updating. **Diagnostics added (temporary):** `ClickProbe` logs each
+forwarded left press (mode, hit type incl. ULTRAKILL, block, missTime, destroyDelay, hands
+busy), each `startAttack` result (MinecraftMixin RETURN), and watches the targeted block for
+20 ticks (became air / came back); `ServerBlockDebugMixin` logs every server block-action reason.
+
+**Measured (ClickProbe):** for forwarded presses `startAttack` NEVER ran (it appeared only for
+presses typed directly into Minecraft's window); `destroyDelay` on one block went 5 -> 3 -> 1 ->
+break, about 2 per click; mode CREATIVE; no server rejections ("creative destroy" each time); the
+block did not break on Minecraft's side either. So each click acted as "held for ~2 ticks" and
+`continueAttack` counted down Creative's 5-tick destroyDelay: exactly 3-4 clicks.
+
+**Cause (bytecode, read properly this time):** `MouseHandler.onButton` begins
+`if (window == 0) return; if (window != handle) return;`. InputApplier passed 0 under a comment
+(Milestone A) claiming 0 meant "no particular window, verified" — the opposite of the code.
+Every replayed press since Milestone A was dropped on line one: no KeyMapping.click. Only the
+separately set held state ever worked (holding mines; placement via keyUse's held branch).
+`onMove` has the same guard, so its 0-window call has always been a no-op — left that way on
+purpose (the camera turns via the accumulators; a live onMove would double the turning).
+**Fix:** `forwardButton` passes `mc.getWindow().handle()`. Clicks now reach KeyMapping.click,
+so startAttack (instant break) and startUseItem fire on the press, as in vanilla. Lesson 3 of the
+HANDOVER again: an unverified "verified" comment.
+
+**Follow-up playtest:** the window-handle fix made things worse. Left clicks still needed 3-4
+presses; right-clicking a block now broke it and placed it again (break-then-replace), while
+placing on ULTRAKILL geometry still worked. My misreading, too: the user had said the hand swings
+on EVERY click, i.e. the press was arriving in some form.
+
+**Measured:** Minecraft's own diagnostic line `input: button LMB=false RMB=true ... clickCounter
+attack=1 use=0` — a forwarded RIGHT press incremented the ATTACK click counter; the server log
+showed the same block destroyed ~4 times a second (placed by the held use, broken by the click).
+
+**Cause:** Minecraft 26.3 numbers mouse buttons from 1. `onButton`'s tail sets isLeftPressed when
+`button == 1`, isMiddlePressed for 2, isRightPressed for 3; `InputConstants.MOUSE_BUTTON_LEFT = 1`,
+`MIDDLE = 2`, `RIGHT = 3`. InputApplier hard-coded GLFW's 0 = left, 1 = right. With window 0 every
+press was dropped, hiding this; with the real handle a forwarded LEFT became unbound button 0 (no
+click: still only the held state broke blocks, 3-4 presses) and a forwarded RIGHT became a LEFT
+click. **Fix:** MOUSE_LEFT / MOUSE_RIGHT now are `InputConstants.MOUSE_BUTTON_LEFT` / `_RIGHT`.
+Both bugs predate this session; the window fix only unmasked the button numbering.
+
+User: "That actually fixed the issue for good." Click diagnostics (ClickProbe,
+ServerBlockDebugMixin, the startAttack probe) removed.
+
+---
+
+## 2026-10-13 — Block particles in ULTRAKILL (awaiting playtest)
+
+User asked for Minecraft's particles in ULTRAKILL so block breaking looks right.
+
+**26.3 particle system (javap):** `ParticleEngine.particles` is a private
+`Map<ParticleRenderType, ParticleGroup<?>>`; `ParticleGroup.particles` a private Queue.
+Block debris is `TerrainParticle` (a `SingleQuadParticle`): `x/y/z` + `xo/yo/zo`, `quadSize`
+(`getQuadSize(partial)` public), `rCol/gCol/bCol/alpha`, and protected `getU0..V1` overridden by
+TerrainParticle to a random quarter patch of the block texture — in the block atlas ULTRAKILL
+already holds. Other particle types use the particle atlas; not exported yet.
+
+**Collision:** `Particle.move` collides via `Entity.collideBoundingBox(CollisionContext, ...)`, i.e.
+the CollisionContext overload of `collectCollidersIgnoringWorldBorder`, unpatched until now —
+debris would have fallen through ULTRAKILL floors. EntityCollisionMixin now patches that overload
+too (all callers get ULTRAKILL boxes).
+
+**Protocol:** PARTICLES table (Minecraft -> ULTRAKILL, 2048 x {x,y,z,size,u0,v0,u1,v1 f32, rgba u32},
+73,744 bytes, appended last). Colour written with putInt, not packed into float bits (alpha 255
+would be a NaN pattern).
+
+**Minecraft (`render/ParticleExport`):** each frame samples live TerrainParticles via accessor
+mixins (ParticleEngine/ParticleGroup/Particle/SingleQuadParticle; UV getters by @Invoker, so
+TerrainParticle's override runs), position interpolated with the frame's partial tick.
+**ULTRAKILL (`McWorldView.LateTick`, after the camera is placed):** one camera-facing quad per
+particle in world space (centre mapped through the root, half-size x map scale), clockwise for
+Unity's front face, top edge = v0; drawn with the blocks' current cutout material.
+
+**Playtest:** particles show up. But "the whole world is diagonal" and the player falls through
+the ground.
+
+**Cause (from the log, not the particle change):** Minecraft started after ULTRAKILL, so the spawn
+handshake timed out and the puppet anchored in a non-level scene (uk 0,-58.8,5). There ULTRAKILL's
+own `CameraController.ApplyRotations` threw NullReferenceException every frame (1,244 warnings),
+so the camera never turned to the anchor heading. `CacheUkBasis` sampled the unturned camera
+(UK fwd = +Z) and its own self-check said `INVALID: sampled 67.5 deg away` — but it cached it
+anyway, and `_ukBasisCached` was never reset, so the next, correct anchor at spawn kept the bad
+basis. The whole MC<->UK map (movement, block placement, collision boxes) was rotated 67.5
+degrees: diagonal world, floors not under the player. A latent Stage 1 bug; previous sessions
+happened to make their first sample in a real level.
+
+**Fix:** (1) an invalid sample is never stored; it retries every frame and MappingReady stays
+false (collision and world drawing wait); (2) `_ukBasisCached` resets on every anchor and on
+player re-acquire, so each level samples its own; (3) ApplyRotations warnings rate-limited
+(1 per 600) and report which reference is null and whether NewMovement.Instance is our player.

@@ -472,6 +472,34 @@ public final class Bridge implements AutoCloseable {
      * Write the PLAYER slot. Minecraft owns the player, so this is the one value
      * ULTRAKILL depends on most.
      */
+    /**
+     * Write the PARTICLES table under its seqlock: x,y,z,size,u0,v0,u1,v1 (floats, 8 per particle)
+     * and rgba (one int per particle).
+     */
+    public void writeParticleTable(long tickTimestamp, float[] rec, int[] rgba, int count) {
+        if (!connected) return;
+        if (count > Protocol.TBL_PARTICLES_CAPACITY) count = Protocol.TBL_PARTICLES_CAPACITY;
+        int base = Protocol.TBL_PARTICLES_OFFSET;
+        beginWrite(base + Protocol.TBL_PARTICLES_OFF_SEQ);
+        buf.putLong(base + Protocol.TBL_PARTICLES_OFF_TICKTIMESTAMP, tickTimestamp);
+        buf.putInt(base + Protocol.TBL_PARTICLES_OFF_COUNT, count);
+        int r0 = base + Protocol.TBL_PARTICLES_OFF_RECORDS;
+        for (int i = 0; i < count; i++) {
+            int at = r0 + i * Protocol.TBL_PARTICLES_RECORD_SIZE, o = i * 8;
+            buf.putFloat(at + Protocol.TBL_PARTICLES_REC_OFF_X, rec[o]);
+            buf.putFloat(at + Protocol.TBL_PARTICLES_REC_OFF_Y, rec[o + 1]);
+            buf.putFloat(at + Protocol.TBL_PARTICLES_REC_OFF_Z, rec[o + 2]);
+            buf.putFloat(at + Protocol.TBL_PARTICLES_REC_OFF_SIZE, rec[o + 3]);
+            buf.putFloat(at + Protocol.TBL_PARTICLES_REC_OFF_U0, rec[o + 4]);
+            buf.putFloat(at + Protocol.TBL_PARTICLES_REC_OFF_V0, rec[o + 5]);
+            buf.putFloat(at + Protocol.TBL_PARTICLES_REC_OFF_U1, rec[o + 6]);
+            buf.putFloat(at + Protocol.TBL_PARTICLES_REC_OFF_V1, rec[o + 7]);
+            buf.putInt(at + Protocol.TBL_PARTICLES_REC_OFF_RGBA, rgba[i]);
+        }
+        java.lang.invoke.VarHandle.releaseFence();
+        endWrite(base + Protocol.TBL_PARTICLES_OFF_SEQ);
+    }
+
     /** Write the SELECTION slot: what the crosshair targets (kind 0 none, 1 block, 2 placement). */
     public void writeSelection(int kind, double minX, double minY, double minZ, double maxX, double maxY, double maxZ) {
         if (!connected) return;

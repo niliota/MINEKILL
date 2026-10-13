@@ -173,6 +173,21 @@ TABLES = [
         ("maxY","f32", ""),
         ("maxZ","f32", ""),
      ]),
+    ("PARTICLES", "Minecraft -> ULTRAKILL",
+     "Minecraft's live block particles (TerrainParticle), interpolated, for ULTRAKILL to draw as billboards", 2048, [
+        ("tickTimestamp","i64", "epoch ms of the frame that sampled them"),
+        ("count","u32", "valid records, <= capacity"),
+     ], [
+        ("x","f32", "Minecraft block coords, particle centre"),
+        ("y","f32", ""),
+        ("z","f32", ""),
+        ("size","f32", "half-size of the quad, blocks"),
+        ("u0","f32", "block-atlas UV rectangle"),
+        ("v0","f32", ""),
+        ("u1","f32", ""),
+        ("v1","f32", ""),
+        ("rgba","u32", "colour, r in the low byte"),
+     ]),
 ]
 
 
