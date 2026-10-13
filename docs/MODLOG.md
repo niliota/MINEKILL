@@ -1819,3 +1819,28 @@ not the movement path EntityCollisionMixin patches, so ULTRAKILL floors were inv
 every direction looked like a drop. **Fix:** `PlayerEdgeMixin` redirects that call:
 no collision only if ULTRAKILL boxes are clear too. Sneaking should now stop at ULTRAKILL ledges
 like at block edges. (SkyCraft instead disables the edge stop entirely.)
+
+---
+
+## 2026-10-13 — Playtest: materials immaculate; defaults locked by name
+
+User: "immaculate", shading included. F9 option 1 perfect; F10 option 3 "I believe"; F11 had no
+visible effect.
+
+**From the log:** F9 [1] = Master clone of 'Metal Decoration 25' (queue 2000, opaque, vertex-lit).
+F10 options were [1] Master clone of 'SisyHead3' (an ENEMY material: queue 2450, _BlendMode 1,
+ALPHA_TEST, cull off, NOT vertex-lit), [2] Sprites/Default, [3] Unlit/Texture. Option 3 ignores
+vertex colour and alpha, so it is a surprising pick; flagged to the user. F11 did nothing because
+the test had no translucent quads: in 26.3 plain glass is CUTOUT; only stained glass / ice / water
+are TRANSLUCENT. Master variants in the level: 40+ logged; transparent ones are queue 3000,
+_BlendMode 2, src 5 / dst 10, keyword TRANSPARENCY.
+
+**Change:** defaults chosen by NAME (lists vary by level): solid = first (Master opaque clone),
+cutout = "Unlit/Texture" as requested. Added F10 [4]: the solid layer's vertex-lit Master clone
+switched to cutout with SisyHead3's measured settings (queue 2450, _BlendMode/_SrcBlend/
+_DstBlend/_ZWrite copied, ALPHA_TEST) — expected best; appended so existing positions keep.
+
+User: F11 keep the first option (Master clone of the level's transparent material, e.g. 'Mulch'),
+"and that should be it". All three layer defaults settled: solid = Master opaque clone,
+cutout = Unlit/Texture, translucent = Master transparent clone. F9/F10/F11 remain as a runtime
+comparison tool. (F10 [4], the vertex-lit cutout clone, stays available one press away.)
