@@ -77,6 +77,7 @@ namespace UltraCraft
         private PuppetController _puppet;
         private InputForwarder _input;
         private CollisionPublisher _collision;
+        private McWorldView _world;
         private int _focusFrames;
         private bool _focusApplied;
         private int _lastX = int.MinValue, _lastY = int.MinValue, _lastZ = int.MinValue;
@@ -190,6 +191,9 @@ namespace UltraCraft
             // After the puppet, so this frame's mapping is the one the boxes are built in.
             if (_collision == null) _collision = new CollisionPublisher(_bridge, _puppet, Log);
             _collision.Tick();
+
+            if (_world == null) _world = new McWorldView(_bridge.Path, _puppet, Log);
+            _world.Tick();
         }
 
         /// <summary>
@@ -320,6 +324,16 @@ namespace UltraCraft
                           $"voxelInvalidatedBlocks={_collision.Voxels.Invalidations}\n" +
                           $"voxelMergedBoxes={_collision.Voxels.MergedBoxes}\n" +
                           $"voxelLastMergeMs={_collision.Voxels.LastMergeMs:F1}\n"
+                        : "") +
+                    (_world != null
+                        ? $"worldSections={_world.Sections}\n" +
+                          $"worldAtlas={_world.AtlasSize}\n" +
+                          $"worldShader={_world.ShaderName}\n" +
+                          $"streamOk={_world.Stream.Ok}\n" +
+                          $"streamRecords={_world.Stream.Records}\n" +
+                          $"streamBytesRead={_world.Stream.BytesRead}\n" +
+                          $"streamPending={_world.Stream.Pending}\n" +
+                          $"streamResync={_world.Stream.ResyncRequested}/{_world.Stream.ResyncServed}\n"
                         : "") +
                     _playerText;
 

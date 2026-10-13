@@ -115,6 +115,12 @@ public final class UkCollision {
         injections++;   // racy across threads, which is fine for a rough counter
     }
 
+    /** True if any ULTRAKILL box overlaps {@code box} (strictly, like AABB.intersects). */
+    public static boolean intersectsAny(AABB box) {
+        for (AABB b : current.boxes) if (b.intersects(box)) return true;
+        return false;
+    }
+
     public static boolean hasShapes() {
         return current.boxes.length > 0;
     }

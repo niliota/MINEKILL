@@ -225,6 +225,31 @@ public final class Protocol {
         }
     }
 
+    // STREAM file (bulk Minecraft -> ULTRAKILL data). See generate.py.
+    public static final int STREAM_MAGIC = 1414745173;  // 'ULST'
+    public static final int STREAM_VERSION = 1;
+    public static final int STREAM_HEADER_SIZE = 64;
+    public static final int STREAM_RING_OFFSET = 64;  // ring starts here
+    public static final int STREAM_RING_SIZE = 67108864;
+    public static final int STREAM_TOTAL_SIZE = 67108928;  // bytes in the mapped file
+    public static final int STREAM_OFF_MAGIC = 0;  // u32
+    public static final int STREAM_OFF_VERSION = 4;  // u32
+    public static final int STREAM_OFF_UK_RESYNC_REQUEST = 8;  // u32, written by ULTRAKILL
+    public static final int STREAM_OFF_MC_RESYNC_SERVED = 12;  // u32, written by Minecraft
+    public static final int STREAM_OFF_HEAD = 16;  // u64, total bytes written, Minecraft
+    public static final int STREAM_OFF_TAIL = 24;  // u64, total bytes consumed, ULTRAKILL
+    public static final int STREAM_RECORD_HEADER = 8;  // u32 type, u32 payload length
+    public static final int STREAM_MSG_PAD = 0;  // skip to ring offset 0
+    public static final int STREAM_MSG_CLEAR_ALL = 1;  // drop every section and the atlas
+    public static final int STREAM_MSG_ATLAS = 2;  // u32 width, u32 height, RGBA8 rows top to bottom
+    public static final int STREAM_MSG_SECTION = 3;  // i32 sx, sy, sz, u32 vertexCount, vertices (0 = remove section)
+    public static final int STREAM_SECTION_HEADER = 16;
+    public static final int STREAM_VERTEX_SIZE = 28;  // triangle list, 3 vertices per triangle
+    public static final int STREAM_VTX_OFF_POS = 0;  // f32 x3, block units relative to the section origin
+    public static final int STREAM_VTX_OFF_UV = 12;  // f32 x2, atlas UV, v down
+    public static final int STREAM_VTX_OFF_COLOR = 20;  // u8 r,g,b,a: Minecraft tint x face shade x ambient occlusion
+    public static final int STREAM_VTX_OFF_FLAGS = 24;  // u32: bits 0-3 block light, 8-11 sky light, 16 translucent, 17 cutout (neither = solid)
+
     // Tables: one seqlock over a header and a list of fixed-size records.
     public static final int TBL_COLLISION_OFFSET = 12600;  // ULTRAKILL -> Minecraft: ULTRAKILL collision boxes near the player, already in Minecraft block coords
     public static final int TBL_COLLISION_SIZE = 98328;

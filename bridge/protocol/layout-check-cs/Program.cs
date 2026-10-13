@@ -20,7 +20,7 @@ class LayoutCheck
         foreach (var f in t.GetFields(BindingFlags.Public | BindingFlags.Static))
         {
             if (!f.IsLiteral || f.FieldType != typeof(int)) continue;
-            if (f.Name.StartsWith("OFFSET_") || f.Name.StartsWith("TBL_"))
+            if (f.Name.StartsWith("OFFSET_") || f.Name.StartsWith("TBL_") || f.Name.StartsWith("STREAM_"))
                 Console.WriteLine($"CONST:{f.Name}:{f.GetValue(null)}");
         }
 
