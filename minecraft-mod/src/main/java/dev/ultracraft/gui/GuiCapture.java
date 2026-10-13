@@ -236,104 +236,42 @@ public final class GuiCapture implements VertexConsumer {
 
     // ---- items: the real model, projected like GuiItemAtlas.drawToSlot ----------
 
-    private record ItemQuad(float[] x, float[] y, float[] u, float[] v, int color, int tex, float depth) {}
-
-    private final List<ItemQuad> itemQuads = new ArrayList<>();
-    private final ItemCollector collector = new ItemCollector();
+    private final dev.ultracraft.render.ModelCollector itemCollector = new dev.ultracraft.render.ModelCollector();
     private static final Vector3f L0 = new Vector3f(0.2f, 1.0f, -0.7f).normalize();
     private static final Vector3f L1 = new Vector3f(-0.2f, 1.0f, 0.7f).normalize();
+    private static final Vector3f NO_LIGHT = new Vector3f();
 
+    /**
+     * An item in a slot, from its real model, projected like GuiItemAtlas.drawToSlot. The shared
+     * ModelCollector takes plain item models and also the special ones drawn as entity models
+     * (chests, beds, shields, banners, heads, ...). Lit with Minecraft's GUI item lights when the
+     * model uses block light (3D blocks), unlit when flat.
+     */
     private void item(Minecraft mc, GuiItemRenderState state) {
         ItemStackRenderState rs = state.itemStackRenderState();
-        itemQuads.clear();
-        collector.blockLight = rs.usesBlockLight();
-        PoseStack pose = new PoseStack();
+        boolean lit = rs.usesBlockLight();
+        itemCollector.begin(new Matrix4f(), lit ? L0 : NO_LIGHT, lit ? L1 : NO_LIGHT, false);
         try {
-            rs.submit(pose, collector, 0xF000F0, 0, 0);
+            rs.submit(new PoseStack(), itemCollector, 0xF000F0, net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY, 0);
         } catch (RuntimeException ex) {
             return;
         }
-        itemQuads.sort((a, b) -> Float.compare(a.depth(), b.depth()));   // far first
         float cx = state.x() + 8, cy = state.y() + 8;
         Vector2f p = new Vector2f();
-        for (ItemQuad q : itemQuads) {
+        for (var q : itemCollector.sortedQuads()) {   // far first
             if (n + 4 > CAP) break;
             for (int k = 0; k < 4; k++) {
                 // Model y is up; GUI y is down. Then the item's own GUI pose (e.g. a scaled hotbar).
-                state.pose().transformPosition(cx + q.x()[k] * 16f, cy - q.y()[k] * 16f, p);
+                state.pose().transformPosition(cx + q.x[k] * 16f, cy - q.y[k] * 16f, p);
                 xyuv[n * 4] = p.x;
                 xyuv[n * 4 + 1] = p.y;
-                xyuv[n * 4 + 2] = q.u()[k];
-                xyuv[n * 4 + 3] = q.v()[k];
-                rgba[n] = q.color();
-                tex[n] = q.tex();
+                xyuv[n * 4 + 2] = q.u[k];
+                xyuv[n * 4 + 3] = q.v[k];
+                rgba[n] = q.rgba;
+                tex[n] = q.tex;
                 n++;
             }
         }
     }
 
-    /** Receives the item's posed quads; everything that is not a plain item model is ignored. */
-    private final class ItemCollector implements SubmitNodeCollector {
-        boolean blockLight;
-
-        @Override public OrderedSubmitNodeCollector order(int order) { return this; }
-
-        @Override
-        public void submitItem(PoseStack poseStack, ItemDisplayContext ctx, int light, int overlay, int outline,
-                               int[] tints, ItemQuads quads, ItemStackRenderState.FoilType foil) {
-            Matrix4f m = poseStack.last().pose();
-            Vector3f a = new Vector3f(), b = new Vector3f(), c = new Vector3f();
-            for (BakedQuad q : quads.all()) {
-                float[] xs = new float[4], ys = new float[4], us = new float[4], vs = new float[4];
-                float depth = 0;
-                Vector3f[] pts = new Vector3f[4];
-                for (int k = 0; k < 4; k++) {
-                    var pos = q.position(k);
-                    Vector3f t = m.transformPosition(pos.x(), pos.y(), pos.z(), new Vector3f());
-                    pts[k] = t;
-                    xs[k] = t.x; ys[k] = t.y; depth += t.z;
-                    long uv = q.packedUV(k);
-                    us[k] = UVPair.unpackU(uv); vs[k] = UVPair.unpackV(uv);
-                }
-                int col = 0xFFFFFFFF;
-                var info = q.materialInfo();
-                if (info.isTinted() && tints != null && info.tintIndex() >= 0 && info.tintIndex() < tints.length) {
-                    int argb = tints[info.tintIndex()];
-                    col = 0xFF000000 | (argb & 0xFF) << 16 | (argb & 0xFF00) | (argb >> 16 & 0xFF);
-                }
-                if (blockLight) {
-                    pts[1].sub(pts[0], a); pts[2].sub(pts[0], b);
-                    a.cross(b, c);
-                    if (c.lengthSquared() > 1e-12f) c.normalize();
-                    float shade = Math.min(1f, 0.4f + 0.6f * (Math.max(0, c.dot(L0)) + Math.max(0, c.dot(L1))));
-                    col = shadeColor(col, shade);
-                }
-                int texKey = info.sprite().atlasLocation().equals(TextureAtlas.LOCATION_ITEMS)
-                        ? Protocol.GUI_TEX_ITEMS : Protocol.GUI_TEX_BLOCKS;
-                itemQuads.add(new ItemQuad(xs, ys, us, vs, col, texKey, depth / 4f));
-            }
-        }
-
-        private int shadeColor(int rgba, float s) {
-            int r = Math.round((rgba & 0xFF) * s), g = Math.round((rgba >> 8 & 0xFF) * s), b = Math.round((rgba >> 16 & 0xFF) * s);
-            return (rgba & 0xFF000000) | r | g << 8 | b << 16;
-        }
-
-        // Not plain item models (chests, banners, heads, ...): not drawn yet.
-        @Override public void submitShadow(PoseStack p, float f, java.util.List<net.minecraft.client.renderer.entity.state.EntityRenderState.ShadowPiece> l) {}
-        @Override public void submitNameTag(PoseStack p, net.minecraft.world.phys.Vec3 v, int i, net.minecraft.network.chat.Component c, boolean b, int j, net.minecraft.client.renderer.state.level.CameraRenderState s) {}
-        @Override public void submitText(PoseStack p, float x, float y, net.minecraft.util.FormattedCharSequence t, boolean d, net.minecraft.client.gui.Font.DisplayMode m, int a, int b, int c, int e) {}
-        @Override public void submitTextBackground(PoseStack p, float a, float b, float c, float d, int e, net.minecraft.client.gui.Font.DisplayMode m, int f) {}
-        @Override public void submitFlame(PoseStack p, net.minecraft.client.renderer.entity.state.EntityRenderState s, org.joml.Quaternionf q) {}
-        @Override public void submitLeash(PoseStack p, net.minecraft.client.renderer.entity.state.EntityRenderState.LeashState s) {}
-        @Override public <S> void submitModel(net.minecraft.client.model.Model<? super S> model, S s, PoseStack p, net.minecraft.client.renderer.rendertype.RenderType t, int a, int b, int c, net.minecraft.client.renderer.texture.UvMapping u, int d) {}
-        @Override public <S> void submitCrumblingOverlay(net.minecraft.client.model.Model<? super S> model, S s, PoseStack p, net.minecraft.client.renderer.rendertype.RenderType t, int a, int b, int c, net.minecraft.client.renderer.feature.ModelFeatureRenderer.CrumblingOverlay o) {}
-        @Override public void submitMovingBlock(PoseStack p, net.minecraft.client.renderer.block.MovingBlockRenderState s, int i) {}
-        @Override public void submitBlockModel(PoseStack p, net.minecraft.client.renderer.rendertype.RenderType t, java.util.List<net.minecraft.client.renderer.block.dispatch.BlockStateModelPart> parts, int[] tints, int a, int b, int c) {}
-        @Override public void submitBreakingBlockModel(PoseStack p, java.util.List<net.minecraft.client.renderer.block.dispatch.BlockStateModelPart> parts, int i, boolean b) {}
-        @Override public void submitShapeOutline(PoseStack p, net.minecraft.world.phys.shapes.VoxelShape s, net.minecraft.client.renderer.rendertype.RenderType t, int i, float f, boolean b) {}
-        @Override public void submitCustomGeometry(PoseStack p, net.minecraft.client.renderer.rendertype.RenderType t, SubmitNodeCollector.CustomGeometryRenderer r) {}
-        @Override public void submitQuadParticleGroup(net.minecraft.client.renderer.state.level.QuadParticleRenderState s) {}
-        @Override public void submitGizmoPrimitives(net.minecraft.client.renderer.gizmos.DrawableGizmoPrimitives.Group g, net.minecraft.client.renderer.state.level.CameraRenderState s, boolean b) {}
-    }
 }

@@ -231,6 +231,7 @@ namespace UltraCraft.Bridge
         public const int STREAM_MSG_SECTION = 3;  // i32 sx, sy, sz, u32 vertexCount, vertices (0 = remove section)
         public const int STREAM_MSG_EXTRA_ATLAS = 4;  // u32 atlasId (1 items, 2 gui), u32 width, u32 height, RGBA8 rows top to bottom
         public const int STREAM_MSG_GUI_SPRITES = 5;  // u32 count, then per sprite: u16 nameLength, name (ASCII), f32 u0,v0,u1,v1, i32 width,height (pixels)
+        public const int STREAM_MSG_ATLAS_PATCH = 7;  // u32 atlasId (0 blocks, 1 items, 2 gui), u32 x, u32 y, u32 width, u32 height, RGBA8 rows top to bottom: an animated sprite's current frame
         public const int STREAM_MSG_TEXTURE = 6;  // u32 key, u32 width, u32 height, u32 x, u32 y, u32 patchWidth, u32 patchHeight, RGBA8 patch: create texture `key` if new, then write the patch
         public const int GUI_TEX_NONE = 0;  // GUI vertex texture keys: untextured (white)
         public const int GUI_TEX_GUI = 1;  // Minecraft's GUI atlas
@@ -238,6 +239,7 @@ namespace UltraCraft.Bridge
         public const int GUI_TEX_ITEMS = 3;  // item atlas
         public const int MODEL_TEX_MULTIPLY = 16777216;  // WORLD_MODELS tex flag: multiply-blend decal (block-breaking cracks: Minecraft blends them as dst * src * 2)
         public const int GUI_TEX_DYNAMIC_BASE = 16;  // first key of textures mirrored through STREAM_MSG_TEXTURE (font sheets)
+        public const int STREAM_ATLAS_BLOCKS = 0;
         public const int STREAM_ATLAS_ITEMS = 1;
         public const int STREAM_ATLAS_GUI = 2;
         public const int STREAM_SECTION_HEADER = 16;

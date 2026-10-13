@@ -169,6 +169,7 @@ namespace UltraCraft
                     case Protocol.STREAM_MSG_EXTRA_ATLAS: LoadExtraAtlas(data, len); break;
                     case Protocol.STREAM_MSG_GUI_SPRITES: LoadGuiSprites(data, len); break;
                     case Protocol.STREAM_MSG_TEXTURE: LoadTexturePatch(data, len); break;
+                    case Protocol.STREAM_MSG_ATLAS_PATCH: PatchAtlas(data, len); break;
                     default: _log.LogWarning($"world: unknown stream record type {type} ({len} bytes)"); break;
                 }
             }
@@ -246,6 +247,40 @@ namespace UltraCraft
             else if (id == Protocol.STREAM_ATLAS_GUI) { if (GuiAtlas != null) UnityEngine.Object.Destroy(GuiAtlas); GuiAtlas = tex; }
             else { UnityEngine.Object.Destroy(tex); return; }
             _log.LogInfo($"world: {tex.name} {w}x{h} loaded");
+        }
+
+        // Animated sprites: one small staging texture per patch size, copied into the atlas on the
+        // GPU. The atlases are non-readable, and re-uploading a 2048x2048 atlas per frame would
+        // cost far more than a 16x16 copy.
+        private readonly Dictionary<long, Texture2D> _patchStaging = new Dictionary<long, Texture2D>();
+        private byte[] _patchBytes = new byte[0];
+        private bool _patchFailedLogged;
+
+        private void PatchAtlas(byte[] data, int len)
+        {
+            int id = BitConverter.ToInt32(data, 0), x = BitConverter.ToInt32(data, 4), y = BitConverter.ToInt32(data, 8);
+            int w = BitConverter.ToInt32(data, 12), h = BitConverter.ToInt32(data, 16);
+            Texture2D atlas = id == Protocol.STREAM_ATLAS_BLOCKS ? _atlas : id == Protocol.STREAM_ATLAS_ITEMS ? ItemAtlas : id == Protocol.STREAM_ATLAS_GUI ? GuiAtlas : null;
+            if (atlas == null || w <= 0 || h <= 0 || x < 0 || y < 0 || x + w > atlas.width || y + h > atlas.height || len < 20 + w * h * 4) return;
+            long sk = ((long)w << 32) | (uint)h;
+            if (!_patchStaging.TryGetValue(sk, out Texture2D stage) || stage == null)
+            {
+                stage = new Texture2D(w, h, TextureFormat.RGBA32, false) { hideFlags = HideFlags.HideAndDontSave, filterMode = FilterMode.Point };
+                _patchStaging[sk] = stage;
+            }
+            if (_patchBytes.Length != w * h * 4) _patchBytes = new byte[w * h * 4];
+            Buffer.BlockCopy(data, 20, _patchBytes, 0, _patchBytes.Length);
+            try
+            {
+                stage.LoadRawTextureData(_patchBytes);
+                stage.Apply(false, false);
+                // Rows top to bottom land on rows y.. upward, the same as the atlas upload.
+                Graphics.CopyTexture(stage, 0, 0, 0, 0, w, h, atlas, 0, 0, x, y);
+            }
+            catch (Exception e)
+            {
+                if (!_patchFailedLogged) { _patchFailedLogged = true; _log.LogWarning($"world: animated sprite copy failed: {e.Message}"); }
+            }
         }
 
         /// <summary>Textures mirrored from Minecraft (font sheets), by GUI_TEX key.</summary>

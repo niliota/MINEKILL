@@ -2355,3 +2355,32 @@ User confirmed: mobs, items, tridents, arrows, chests and beds render; water blu
   raycast, not by collision, so they still pass through ULTRAKILL walls.
 
 User confirmed: entities collide with ULTRAKILL walls and floors. Pathfinding does not (as expected).
+
+### Pathfinding, projectiles, special item icons, animated textures
+
+- **Pathfinding over ULTRAKILL geometry** (PathContextMixin, WalkNodeEvaluatorMixin,
+  GroundPathNavigationMixin, GoalUtilsMixin). `PathfindingContext.getPathTypeFromState` returns
+  BLOCKED for a cell ULTRAKILL fills (UkCollision.blocksCell: 0.2-block horizontal margin, the
+  cell's top 0.2 blocks ignored so a floor belongs to the cell above), so Minecraft's own rules
+  make the cell above WALKABLE. `WalkNodeEvaluator.getFloorLevel` takes the ULTRAKILL surface
+  (UkCollision.topIn); `hasCollisions` counts ULTRAKILL boxes; `GroundPathNavigation
+  .isStableDestination` and `GoalUtils.isSolid` (random wandering) accept ULTRAKILL floors.
+  Grid-indexed, allocation-free queries (pathfinding asks thousands per path, on the server).
+- **Projectiles:** arrows/tridents (`AbstractArrow.tick`) and thrown projectiles
+  (`ProjectileUtil.getHitResult`) trace with `Level.clipIncludingBorder`; both calls are
+  redirected to ProjectileClip, which also raycasts ULTRAKILL's boxes and returns a block hit on
+  the nearer one, so projectiles stick in / break on ULTRAKILL walls. Targets checked in bytecode.
+- **Special item icons** (chests, beds, shields, banners, heads in slots): GuiCapture's item path
+  now uses the shared ModelCollector (submitModel handled), lit with the GUI item lights only for
+  block-lit models; the old item-only collector is gone.
+- **Animated textures:** AtlasAnimator follows each animated sprite's frame list and times (block
+  and item atlases, from the sprite's AnimatedTexture via reflection) at 20 ticks/s and streams
+  the sprite's new frame (STREAM_MSG_ATLAS_PATCH = 7) when it changes; ULTRAKILL copies it into
+  the atlas with Graphics.CopyTexture from a small staging texture. Resyncs resend all frames.
+  Interpolated frames (some sprites blend between frames) are shown unblended.
+- Crash on load: `isStableDestination` is declared on PathNavigation, not GroundPathNavigation (an
+  earlier javap grep printed the inherited line under the wrong class). Retargeted
+  (PathNavigationMixin); every other new target re-checked in the bytecode (method names and the
+  methods containing the redirected calls).
+
+User confirmed: Minecraft loads; animated sprites (water, lava, fire) work; chests etc. in the hotbar; projectiles stick to ULTRAKILL geometry; performance fine. Open: fire z-fighting, no cracks on chests (beds fine), water ignores ULTRAKILL geometry (no placing, no flow), stuck projectiles keep rotating.
