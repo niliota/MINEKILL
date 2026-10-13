@@ -7,9 +7,9 @@ namespace Minekill.Bridge
     public static class Protocol
     {
         public const uint MAGIC = 0x55544C52u;
-        public const uint VERSION = 1730610354u;   // layout fingerprint
+        public const uint VERSION = 622094891u;   // layout fingerprint
         public const int HEADER_SIZE = 56;
-        public const int TOTAL_SIZE = 3332104;
+        public const int TOTAL_SIZE = 3335712;
         public const int SEQ_SIZE = 4;
 
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -276,7 +276,23 @@ namespace Minekill.Bridge
         public const int TBL_COLLISION_INTEREST_REC_OFF_X = 0;  // Minecraft block coords, an entity cluster's centre
         public const int TBL_COLLISION_INTEREST_REC_OFF_Y = 4;
         public const int TBL_COLLISION_INTEREST_REC_OFF_Z = 8;
-        public const int TBL_GUI_OFFSET = 407464;  // Minecraft -> ULTRAKILL: every quad Minecraft's GUI draws this frame (HUD, text, items), in draw order, for ULTRAKILL to replay
+        public const int TBL_ENEMIES_OFFSET = 407464;  // ULTRAKILL -> Minecraft: live ULTRAKILL enemies near the player, for Minecraft to mirror as invisible proxy entities it can fight
+        public const int TBL_ENEMIES_SIZE = 3608;
+        public const int TBL_ENEMIES_CAPACITY = 128;
+        public const int TBL_ENEMIES_OFF_SEQ = 0;  // seqlock, odd while writing
+        public const int TBL_ENEMIES_OFF_TICKTIMESTAMP = 4;  // epoch ms when ULTRAKILL sampled them
+        public const int TBL_ENEMIES_OFF_GENERATION = 12;  // mapping generation (re-anchor); proxies from an older one are removed
+        public const int TBL_ENEMIES_OFF_COUNT = 16;  // valid records, <= capacity
+        public const int TBL_ENEMIES_OFF_RECORDS = 24;
+        public const int TBL_ENEMIES_RECORD_SIZE = 28;
+        public const int TBL_ENEMIES_REC_OFF_ID = 0;  // the enemy's instance id, stable while it lives
+        public const int TBL_ENEMIES_REC_OFF_X = 4;  // Minecraft block coords, bottom centre of the enemy's bounds
+        public const int TBL_ENEMIES_REC_OFF_Y = 8;
+        public const int TBL_ENEMIES_REC_OFF_Z = 12;
+        public const int TBL_ENEMIES_REC_OFF_WIDTH = 16;  // blocks
+        public const int TBL_ENEMIES_REC_OFF_HEIGHT = 20;  // blocks
+        public const int TBL_ENEMIES_REC_OFF_HEALTH = 24;  // ULTRAKILL health (diagnostics)
+        public const int TBL_GUI_OFFSET = 411072;  // Minecraft -> ULTRAKILL: every quad Minecraft's GUI draws this frame (HUD, text, items), in draw order, for ULTRAKILL to replay
         public const int TBL_GUI_SIZE = 786472;
         public const int TBL_GUI_CAPACITY = 32768;
         public const int TBL_GUI_OFF_SEQ = 0;  // seqlock, odd while writing
@@ -295,7 +311,7 @@ namespace Minekill.Bridge
         public const int TBL_GUI_REC_OFF_V = 12;
         public const int TBL_GUI_REC_OFF_RGBA = 16;  // colour, r in the low byte
         public const int TBL_GUI_REC_OFF_TEX = 20;  // GUI_TEX_* key
-        public const int TBL_HAND_OFFSET = 1193936;  // Minecraft -> ULTRAKILL: Minecraft's first-person hands and held items this frame: posed, lit quads in Minecraft view space (camera looks down -z, y up), far first
+        public const int TBL_HAND_OFFSET = 1197544;  // Minecraft -> ULTRAKILL: Minecraft's first-person hands and held items this frame: posed, lit quads in Minecraft view space (camera looks down -z, y up), far first
         public const int TBL_HAND_SIZE = 229400;
         public const int TBL_HAND_CAPACITY = 8192;
         public const int TBL_HAND_OFF_SEQ = 0;  // seqlock, odd while writing
@@ -311,7 +327,7 @@ namespace Minekill.Bridge
         public const int TBL_HAND_REC_OFF_V = 16;
         public const int TBL_HAND_REC_OFF_RGBA = 20;  // colour with lighting applied, r in the low byte
         public const int TBL_HAND_REC_OFF_TEX = 24;  // GUI_TEX_* key
-        public const int TBL_WORLD_MODELS_OFFSET = 1423336;  // Minecraft -> ULTRAKILL: posed model geometry in the world this frame (entities, block entities, the player in third person, block-breaking cracks), unlit, in Minecraft block coords
+        public const int TBL_WORLD_MODELS_OFFSET = 1426944;  // Minecraft -> ULTRAKILL: posed model geometry in the world this frame (entities, block entities, the player in third person, block-breaking cracks), unlit, in Minecraft block coords
         public const int TBL_WORLD_MODELS_SIZE = 1835024;
         public const int TBL_WORLD_MODELS_CAPACITY = 65536;
         public const int TBL_WORLD_MODELS_OFF_SEQ = 0;  // seqlock, odd while writing
@@ -326,7 +342,7 @@ namespace Minekill.Bridge
         public const int TBL_WORLD_MODELS_REC_OFF_V = 16;
         public const int TBL_WORLD_MODELS_REC_OFF_RGBA = 20;  // tint, r in the low byte
         public const int TBL_WORLD_MODELS_REC_OFF_TEX = 24;  // GUI_TEX_* key
-        public const int TBL_PARTICLES_OFFSET = 3258360;  // Minecraft -> ULTRAKILL: Minecraft's live block particles (TerrainParticle), interpolated, for ULTRAKILL to draw as billboards
+        public const int TBL_PARTICLES_OFFSET = 3261968;  // Minecraft -> ULTRAKILL: Minecraft's live block particles (TerrainParticle), interpolated, for ULTRAKILL to draw as billboards
         public const int TBL_PARTICLES_SIZE = 73744;
         public const int TBL_PARTICLES_CAPACITY = 2048;
         public const int TBL_PARTICLES_OFF_SEQ = 0;  // seqlock, odd while writing
@@ -368,6 +384,7 @@ namespace Minekill.Bridge
             KEY = 7,
             CHAR = 8,
             MOUSE_BUTTON = 9,
+            TELEPORT = 10,
         }
     }
 }

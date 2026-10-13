@@ -298,6 +298,28 @@ public final class InputApplier {
                  | ((keys & Protocol.KEY_MOD_ALT) != 0 ? 0x100 : 0);
     }
 
+    /**
+     * An ULTRAKILL hit on the player (combat design): ULTRAKILL damage is out of 100 HP, Minecraft's
+     * out of 20, so it is divided by 5 and dealt as generic damage on the server player. Armour,
+     * enchantments, potions, invulnerability frames, totems and death are Minecraft's.
+     */
+    private static void hurtPlayer(Minecraft mc, int ukDamage, float fromX, float fromY, float fromZ) {
+        var server = mc.getSingleplayerServer();
+        if (server == null || mc.player == null) return;
+        java.util.UUID id = mc.player.getUUID();
+        float amount = ukDamage / 5f;
+        server.execute(() -> {
+            var sp = server.getPlayerList().getPlayer(id);
+            if (sp == null || !sp.isAlive()) return;
+            var generic = sp.level().damageSources().generic();
+            // With a position, a raised shield facing it blocks the hit (generic damage does not
+            // bypass shields; it only had no direction to be blocked from).
+            var source = Float.isNaN(fromX) ? generic
+                    : new net.minecraft.world.damagesource.DamageSource(generic.typeHolder(), new net.minecraft.world.phys.Vec3(fromX, fromY, fromZ));
+            sp.hurtServer(sp.level(), source, amount);
+        });
+    }
+
     private void forwardButton(Minecraft mc, int button, boolean pressed) {
         try {
             mc.mouseHandler.onButton(mc.getWindow().handle(), new MouseButtonInfo(button, heldMods), pressed ? 1 : 0);
@@ -391,6 +413,10 @@ public final class InputApplier {
                             new net.minecraft.client.input.KeyEvent((e.b >>> 22) & 0xFF, e.a, (e.b >>> 8) & 0x3FFF));
                 } else if (e.kind == Protocol.EV_CHAR) {
                     mc.keyboardHandler.charTyped(handle, new net.minecraft.client.input.CharacterEvent(e.a));
+                } else if (e.kind == Protocol.EV_PLAYER_HURT) {
+                    hurtPlayer(mc, Math.abs(e.a), Float.intBitsToFloat(e.b), e.c, e.d);
+                } else if (e.kind == Protocol.EV_TELEPORT) {
+                    PlayerSafety.requestTeleport(new net.minecraft.world.phys.Vec3(Float.intBitsToFloat(e.a), e.c, e.d));
                 } else if (e.kind == Protocol.EV_MOUSE_BUTTON) {
                     // Middle click: pick block in the world, clone stack in creative screens.
                     forwardButton(mc, e.a, e.b == 1);

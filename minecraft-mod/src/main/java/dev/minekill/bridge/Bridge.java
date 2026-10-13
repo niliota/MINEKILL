@@ -402,6 +402,46 @@ public final class Bridge implements AutoCloseable {
      * @return false if no clean copy was possible right now (writer busy). Not an error;
      *         the caller keeps the previous copy.
      */
+    public static final class EnemiesTable {
+        public long tickTimestamp;
+        public int generation;
+        public int count;
+        public final int[] ids = new int[Protocol.TBL_ENEMIES_CAPACITY];
+        /** Per enemy: x, y, z (bottom centre), width, height, health. */
+        public final float[] data = new float[Protocol.TBL_ENEMIES_CAPACITY * 6];
+    }
+
+    public boolean readEnemiesTable(EnemiesTable out) {
+        if (!connected) return false;
+        final int base = Protocol.TBL_ENEMIES_OFFSET;
+        for (int attempt = 0; attempt < 3; attempt++) {
+            int s1 = buf.getInt(base + Protocol.TBL_ENEMIES_OFF_SEQ);
+            if ((s1 & 1) != 0) { Thread.onSpinWait(); continue; }
+            java.lang.invoke.VarHandle.acquireFence();
+            long ts = buf.getLong(base + Protocol.TBL_ENEMIES_OFF_TICKTIMESTAMP);
+            int gen = buf.getInt(base + Protocol.TBL_ENEMIES_OFF_GENERATION);
+            int count = buf.getInt(base + Protocol.TBL_ENEMIES_OFF_COUNT);
+            if (count < 0 || count > Protocol.TBL_ENEMIES_CAPACITY) { Thread.onSpinWait(); continue; }
+            for (int i = 0; i < count; i++) {
+                int at = base + Protocol.TBL_ENEMIES_OFF_RECORDS + i * Protocol.TBL_ENEMIES_RECORD_SIZE, o = i * 6;
+                out.ids[i] = buf.getInt(at + Protocol.TBL_ENEMIES_REC_OFF_ID);
+                out.data[o] = buf.getFloat(at + Protocol.TBL_ENEMIES_REC_OFF_X);
+                out.data[o + 1] = buf.getFloat(at + Protocol.TBL_ENEMIES_REC_OFF_Y);
+                out.data[o + 2] = buf.getFloat(at + Protocol.TBL_ENEMIES_REC_OFF_Z);
+                out.data[o + 3] = buf.getFloat(at + Protocol.TBL_ENEMIES_REC_OFF_WIDTH);
+                out.data[o + 4] = buf.getFloat(at + Protocol.TBL_ENEMIES_REC_OFF_HEIGHT);
+                out.data[o + 5] = buf.getFloat(at + Protocol.TBL_ENEMIES_REC_OFF_HEALTH);
+            }
+            java.lang.invoke.VarHandle.acquireFence();
+            if (buf.getInt(base + Protocol.TBL_ENEMIES_OFF_SEQ) != s1) continue;
+            out.tickTimestamp = ts;
+            out.generation = gen;
+            out.count = count;
+            return true;
+        }
+        return false;
+    }
+
     public boolean readCollisionTable(CollisionTable out) {
         if (!connected) return false;
         final int base = Protocol.TBL_COLLISION_OFFSET;

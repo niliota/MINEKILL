@@ -431,6 +431,30 @@ namespace Minekill.Bridge
             EndWrite(b + Protocol.TBL_COLLISION_OFF_SEQ);
         }
 
+        /// <summary>Write the ENEMIES table: per enemy id, x, y, z, width, height, health.</summary>
+        public void WriteEnemiesTable(long tickTimestamp, uint generation, int[] ids, float[] data, int count)
+        {
+            if (!Connected) return;
+            if (count > Protocol.TBL_ENEMIES_CAPACITY) count = Protocol.TBL_ENEMIES_CAPACITY;
+            int b = Protocol.TBL_ENEMIES_OFFSET;
+            BeginWrite(b + Protocol.TBL_ENEMIES_OFF_SEQ);
+            _view.Write(b + Protocol.TBL_ENEMIES_OFF_TICKTIMESTAMP, tickTimestamp);
+            _view.Write(b + Protocol.TBL_ENEMIES_OFF_GENERATION, generation);
+            _view.Write(b + Protocol.TBL_ENEMIES_OFF_COUNT, (uint)count);
+            for (int i = 0; i < count; i++)
+            {
+                int at = b + Protocol.TBL_ENEMIES_OFF_RECORDS + i * Protocol.TBL_ENEMIES_RECORD_SIZE, o = i * 6;
+                _view.Write(at + Protocol.TBL_ENEMIES_REC_OFF_ID, ids[i]);
+                _view.Write(at + Protocol.TBL_ENEMIES_REC_OFF_X, data[o]);
+                _view.Write(at + Protocol.TBL_ENEMIES_REC_OFF_Y, data[o + 1]);
+                _view.Write(at + Protocol.TBL_ENEMIES_REC_OFF_Z, data[o + 2]);
+                _view.Write(at + Protocol.TBL_ENEMIES_REC_OFF_WIDTH, data[o + 3]);
+                _view.Write(at + Protocol.TBL_ENEMIES_REC_OFF_HEIGHT, data[o + 4]);
+                _view.Write(at + Protocol.TBL_ENEMIES_REC_OFF_HEALTH, data[o + 5]);
+            }
+            EndWrite(b + Protocol.TBL_ENEMIES_OFF_SEQ);
+        }
+
         /// <summary>
         /// Read the PARTICLES table under its seqlock into <paramref name="rec"/> (whole records,
         /// RECORD_SIZE bytes each). Returns the particle count, or -1 if no clean copy was possible.

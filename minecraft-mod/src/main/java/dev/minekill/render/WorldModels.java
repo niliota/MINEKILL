@@ -102,6 +102,7 @@ public final class WorldModels {
         collector.begin(new Matrix4f(), NONE, NONE, false);
         for (var e : mc.level.entitiesForRendering()) {
             if (e == mc.player || e.distanceToSqr(mc.player) > RANGE * RANGE) continue;
+            if (dev.minekill.EnemyProxies.isProxyId(e.getId())) continue;   // ULTRAKILL enemies' stand-ins
             try {
                 var state = dispatcher.extractEntity(e, pt);
                 dispatcher.submit(state, camera, state.x, state.y, state.z, new PoseStack(), collector);

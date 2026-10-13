@@ -2461,3 +2461,69 @@ User confirmed: still connects on Linux with the Windows-aware path and mapping 
   shift/ctrl/alt scancodes from the forwarded state.
 
 User confirmed: F offhand swap and all inventory shortcuts work.
+
+### Combat design (owner's decisions)
+
+- Minecraft -> ULTRAKILL enemies: invisible proxy entities in Minecraft matching each nearby
+  enemy's hitbox, so Minecraft's whole combat applies (melee, bows, tridents, potions,
+  enchantments, mobs); hits are delivered back through `EnemyIdentifier.DeliverDamage`.
+- ULTRAKILL -> player: `NewMovement.GetHurt` intercepted, applied as Minecraft damage scaled
+  100 HP -> 20 (armour, enchantments, potions, totems apply; ULTRAKILL's blood healing does not).
+- Death: a Minecraft death also restarts ULTRAKILL from its checkpoint; Minecraft respawns at the
+  level spawn; inventory follows keepInventory.
+- Balance: proportional (an enemy's ULTRAKILL health treated as Minecraft health); tune later.
+- Other major milestones named: Minecraft blocks solid for ULTRAKILL enemies/projectiles; hidden
+  Minecraft with one-step launch; Windows test and release builds.
+
+### Combat, first build
+
+- **ENEMIES table** (UK -> MC, 128): every 0.1 s CombatBridge publishes `EnemyTracker.enemies`
+  (alive, active, within 64 blocks): instance id, bottom centre, width, height (from the enemy's
+  own collider, else its solid child colliders, mapped into Minecraft), health.
+- **Proxies** (EnemyProxies, integrated server): one invisible, silent, AI-less, gravity-less,
+  no-physics husk per enemy, tagged `minekill_proxy`, scaled with Attributes.SCALE to the
+  enemy's height (synced to the client, so crosshair targeting matches), reinforcement chance 0,
+  never saved (EntityProxyMixin) and never pushed (LivingEntityProxyMixin.isPushable). Removed
+  when the enemy leaves the table or the mapping generation changes.
+- **Minecraft -> enemy:** LivingEntityProxyMixin catches `LivingEntity.hurtServer` at HEAD for
+  proxies: the damage Minecraft computed (cooldown, crits, enchantments, projectiles, fire,
+  explosions) is queued with Minecraft's own 10-tick hurt-cooldown rule and sent as
+  ENTITY_ATTACKED; the proxy loses nothing. Non-combat damage (suffocation, drowning, falling,
+  void) is ignored. ULTRAKILL delivers it with `EnemyIdentifier.DeliverDamage`, multiplier =
+  Minecraft damage x 1 (proportional), hitter "punch" (or "explosion"), with a push away from
+  the player.
+- **Enemy -> player:** Harmony prefix on `NewMovement.GetHurt` (bool, skips the original while
+  bridged and mapped; honours ULTRAKILL's invulnerability layer) sends PLAYER_HURT; Minecraft deals
+  damage / 5 as generic damage to the server player (armour etc. apply).
+- **Death:** MinekillClient notices the first alive frame after a death (Respawn pressed) and sends
+  PLAYER_RESPAWN; ULTRAKILL calls `StatsManager.Restart()`. Without a checkpoint that restarts the
+  scene (spawn sync places Minecraft's player); with one, ULTRAKILL's player is moved and its
+  position is sent back as TELEPORT, which PlayerSafety applies on its next tick.
+
+User: every damage type works on enemies; death and restart work. Issues: shields do not block
+ULTRAKILL hits; after a restart the player falls from a height and dies (wants a grace period
+after the hold ends); the husks are visible and distracting. Asked whether SkyCraft does the same
+(its protocol header describes "invisible hittable proxy entities" too, with knockback in the hit
+event; the local SkyCraft copy lacks its ProxySync source, so its entity type is unknown).
+Balance data from the log: Filth health 0.5, Stray 1.5 - every Minecraft hit kills them at 1:1.
+- **Ground shift + lethal fall, root cause:** every anchor logged "no floor within 3 blocks under
+  spawn", anchors at 102.6-104.2 units: ULTRAKILL drops its player into the level and the anchor
+  is taken mid-drop, at a different height each time. Minecraft's spawn mapped to that point, so
+  the Minecraft world sat at a different height per restart, and Minecraft's player fell the
+  whole drop. The floor search now reaches 64 blocks, so spawn maps onto the floor under the drop.
+- **Fall grace:** 5 s without fall damage (client and server player) after the spawn hold ends
+  and after a checkpoint teleport.
+- **Shield:** PLAYER_HURT now carries where the hit came from (nearest enemy Projectile within 4
+  blocks, else the nearest enemy; damage negative for explosions) and Minecraft builds the generic
+  DamageSource with that position. Generic damage is not in #bypasses_shield; it just had no
+  direction to be blocked from.
+- **Visible husks:** WorldModels skips proxies by entity id (EnemyProxies.isProxyId; single-player
+  shares entity ids between server and client).
+- **Reverted the floor snap** (FloorSearchBlocks back to 3): moving ULTRAKILL's player onto the
+  floor broke ULTRAKILL's level start, and the owner wants the drop to play out. Instead the grace
+  window (5 s after the hold ends or a checkpoint teleport) now makes the player take no damage at
+  all (LivingEntityProxyMixin refuses player damage while PlayerSafety.inGrace()), plus the fall
+  distance reset. The ground-shift cause (anchoring mid-drop) is therefore back; a fix that keeps
+  ULTRAKILL's player untouched would raise Minecraft's player by the drop height instead.
+
+User confirmed: combat works (melee, ranged, potions, taking damage, death and respawn/restart, grace window, hidden proxies). Shield still does not block.

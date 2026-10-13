@@ -34,7 +34,9 @@
     "ItemMixin",
     "FlowingFluidMixin",
     "ProjectileMixin",
-    "InputConstantsMixin"
+    "InputConstantsMixin",
+    "LivingEntityProxyMixin",
+    "EntityProxyMixin"
   ],
   "injectors": {
     "defaultRequire": 1
