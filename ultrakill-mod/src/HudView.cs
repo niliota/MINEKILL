@@ -1,8 +1,8 @@
 using System;
 using UnityEngine;
-using UltraCraft.Bridge;
+using Minekill.Bridge;
 
-namespace UltraCraft
+namespace Minekill
 {
     /// <summary>
     /// Minecraft's GUI, replayed natively in ULTRAKILL: HUD, text, items, chat, titles, boss bars,
@@ -126,7 +126,7 @@ namespace UltraCraft
             DrawHand();
             if (_count <= 0) return;
             if (_mat == null)
-                _mat = new Material(Shader.Find("Sprites/Default")) { hideFlags = HideFlags.HideAndDontSave, name = "UltraCraft.Gui" };
+                _mat = new Material(Shader.Find("Sprites/Default")) { hideFlags = HideFlags.HideAndDontSave, name = "MINEKILL.Gui" };
 
             float scale = BitConverter.ToUInt32(_table, Protocol.TBL_GUI_OFF_GUISCALE);
             if (scale <= 0) return;
@@ -181,7 +181,7 @@ namespace UltraCraft
             if (_handCount <= 0) return;
             if (_handMat == null)
             {
-                _handMat = new Material(Shader.Find("UI/Default")) { hideFlags = HideFlags.HideAndDontSave, name = "UltraCraft.Hand" };
+                _handMat = new Material(Shader.Find("UI/Default")) { hideFlags = HideFlags.HideAndDontSave, name = "MINEKILL.Hand" };
                 _handMat.SetInt("unity_GUIZTestMode", (int)UnityEngine.Rendering.CompareFunction.Always);
             }
             float fov = BitConverter.ToSingle(_hand, Protocol.TBL_HAND_OFF_FOV);

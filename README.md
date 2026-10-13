@@ -1,4 +1,4 @@
-# UltraCraft
+# MINEKILL
 
 Minecraft as the simulation and content engine for ULTRAKILL. You keep your Minecraft
 inventory, your Minecraft movement and your Minecraft mining; ULTRAKILL provides the world,
@@ -18,7 +18,7 @@ Two real games run at the same time and talk through one memory-mapped file.
   Minecraft (native Linux)                  ULTRAKILL (Wine)
   Fabric mod                                BepInEx 5 plugin
         |                                          |
-        |   ultracraft.bridge  (memory-mapped file, both processes map it)
+        |   minekill.bridge  (memory-mapped file, both processes map it)
         +------------------------------------------+
 ```
 
@@ -40,7 +40,7 @@ Done and verified (playtested 2026-10-09):
 - BepInEx 5.4.23.2 (x64 Mono) loads in ULTRAKILL under Wine 11.17. No `WINEDLLOVERRIDES` needed.
 - The Fabric mod for Minecraft 26.3 builds and loads.
 - Both sides open the shared file, agree on protocol version 1, and see each other's process id
-  and heartbeat. No configuration required; both default to `/var/tmp/ultracraft.bridge`.
+  and heartbeat. No configuration required; both default to `/var/tmp/minekill.bridge`.
 - **Minecraft drives ULTRAKILL's player.** WASD moves the ULTRAKILL puppet correctly at every
   heading, mouse look turns both cameras together, and turning the camera does not move the
   player.
@@ -61,7 +61,7 @@ You need both games installed, and the project must already be set up as describ
 
 **ULTRAKILL side**
 
-1. Copy `ultrakill-mod/bin/Release/UltraCraft.ULTRAKILL.dll` into
+1. Copy `ultrakill-mod/bin/Release/Minekill.ULTRAKILL.dll` into
    `ULTRAKILL/BepInEx/plugins/`.
 2. BepInEx itself lives in `ULTRAKILL/` (`winhttp.dll`, `doorstop_config.ini`,
    `.doorstop_version`, `BepInEx/`). If it is not there yet, extract BepInEx 5.4.23.2
@@ -70,9 +70,9 @@ You need both games installed, and the project must already be set up as describ
 
 **Minecraft side**
 
-1. Copy `minecraft-mod/build/libs/ultracraft-minecraft-0.1.0.jar` into the instance's
+1. Copy `minecraft-mod/build/libs/minekill-minecraft-0.1.0.jar` into the instance's
    `minecraft/mods/` folder.
-2. Nothing to configure (see *Setting `ULTRACRAFT_BRIDGE`* below).
+2. Nothing to configure (see *Setting `MINEKILL_BRIDGE`* below).
 
 ### Both games must keep running when unfocused
 
@@ -101,13 +101,13 @@ Minecraft is the simulation engine behind it. This mirrors
 background, and Skyrim draws everything" — SkyCraft gives Minecraft no window at all, which is
 where this project is heading.
 
-### Setting `ULTRACRAFT_BRIDGE`
+### Setting `MINEKILL_BRIDGE`
 
-**Normally you don't need to.** Both sides default to `/var/tmp/ultracraft.bridge`, so they find
+**Normally you don't need to.** Both sides default to `/var/tmp/minekill.bridge`, so they find
 each other with no configuration:
 
-- Minecraft resolves `/var/tmp/ultracraft.bridge`
-- ULTRAKILL resolves the same file as `Z:\var\tmp\ultracraft.bridge`
+- Minecraft resolves `/var/tmp/minekill.bridge`
+- ULTRAKILL resolves the same file as `Z:\var\tmp\minekill.bridge`
 
 `/var/tmp` is used because `Z:` is the one anchor Wine always provides — it is the filesystem
 root — so the path needs no username, no home directory and no assumptions about how the Wine
@@ -115,7 +115,7 @@ prefix was built. Paths derived from the home directory were tried first and aba
 Wine the home cannot be located reliably, and different prefixes produced three different wrong
 answers.
 
-`ULTRACRAFT_BRIDGE` is only an override for unusual setups. If you do set it, it must be the
+`MINEKILL_BRIDGE` is only an override for unusual setups. If you do set it, it must be the
 same file on both sides — the Linux path for Minecraft, and the `Z:` form for ULTRAKILL, because
 Wine maps `Z:` to `/`.
 
@@ -131,15 +131,15 @@ running. It is the dependable source, because BepInEx's log stops flushing under
 
 **ULTRAKILL**
 
-1. Delete `ULTRAKILL/BepInEx/plugins/UltraCraft.ULTRAKILL.dll`.
+1. Delete `ULTRAKILL/BepInEx/plugins/Minekill.ULTRAKILL.dll`.
 2. To remove BepInEx entirely: delete `ULTRAKILL/winhttp.dll`,
    `ULTRAKILL/doorstop_config.ini`, `ULTRAKILL/.doorstop_version` and `ULTRAKILL/BepInEx/`.
    Nothing else in the game folder is modified, so those four are a complete rollback.
 
 **Minecraft**
 
-1. Delete `minecraft/mods/ultracraft-minecraft-0.1.0.jar`.
-2. Delete the `ultracraft.bridge` file if you want a clean slate.
+1. Delete `minecraft/mods/minekill-minecraft-0.1.0.jar`.
+2. Delete the `minekill.bridge` file if you want a clean slate.
 
 ---
 

@@ -1,0 +1,41 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.minekill.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "MinecraftMixin",
+    "WindowMixin",
+    "MouseHandlerMixin",
+    "EntityCollisionMixin",
+    "LevelExtractorMixin",
+    "TextureAtlasAccessor",
+    "SpriteContentsAccessor",
+    "PlayerEdgeMixin",
+    "EntityPickMixin",
+    "ParticleEngineAccessor",
+    "ParticleGroupAccessor",
+    "ParticleAccessor",
+    "SingleQuadParticleAccessor",
+    "GuiRendererMixin",
+    "FontTextureMixin",
+    "RenderTypeAccessor",
+    "RenderSetupAccessor",
+    "GameRendererMixin",
+    "HandRendererMixin",
+    "PictureInPictureRendererMixin",
+    "LevelRendererMixin",
+    "PathContextMixin",
+    "WalkNodeEvaluatorMixin",
+    "PathNavigationMixin",
+    "GoalUtilsMixin",
+    "AbstractArrowMixin",
+    "ProjectileUtilMixin",
+    "ItemMixin",
+    "FlowingFluidMixin",
+    "ProjectileMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

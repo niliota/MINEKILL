@@ -12,7 +12,7 @@ class LayoutCheck
 {
     static void Main()
     {
-        var t = typeof(UltraCraft.Bridge.Protocol);
+        var t = typeof(Minekill.Bridge.Protocol);
         Console.WriteLine($"CONST:HEADER_SIZE:{ProtocolConst(t, "HEADER_SIZE")}");
         Console.WriteLine($"CONST:TOTAL_SIZE:{ProtocolConst(t, "TOTAL_SIZE")}");
         // Every slot/ring offset and every table constant, by name. The Java side prints

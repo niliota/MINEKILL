@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
-using UltraCraft.Bridge;
+using Minekill.Bridge;
 
-namespace UltraCraft
+namespace Minekill
 {
     /// <summary>
     /// Forwards ULTRAKILL's keyboard and mouse into Minecraft.

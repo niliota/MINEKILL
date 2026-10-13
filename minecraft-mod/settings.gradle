@@ -9,4 +9,4 @@ pluginManagement {
     }
 }
 
-rootProject.name = 'ultracraft-minecraft'
+rootProject.name = 'minekill-minecraft'

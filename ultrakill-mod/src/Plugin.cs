@@ -1,9 +1,9 @@
 using BepInEx;
 
-namespace UltraCraft
+namespace Minekill
 {
     /// <summary>
-    /// UltraCraft on the ULTRAKILL side.
+    /// MINEKILL on the ULTRAKILL side.
     ///
     /// Milestone 3: open the shared file, complete the handshake with Minecraft, and
     /// keep the heartbeat alive. Nothing else yet. The point of this stage is to
@@ -20,10 +20,10 @@ namespace UltraCraft
     /// HideAndDontSave object, because the BepInEx plugin object does not survive
     /// ULTRAKILL's scene change at boot.
     /// </summary>
-    [BepInPlugin(Guid, "UltraCraft ULTRAKILL side", "0.1.0")]
+    [BepInPlugin(Guid, "MINEKILL ULTRAKILL side", "0.1.0")]
     public class Plugin : BaseUnityPlugin
     {
-        public const string Guid = "dev.ultracraft.ultrakill";
+        public const string Guid = "dev.minekill.ultrakill";
 
         private void Awake()
         {

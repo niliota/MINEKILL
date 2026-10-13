@@ -1,4 +1,4 @@
-# UltraCraft — HANDOVER
+# MINEKILL — HANDOVER
 
 **Read this first.** You are taking over an in-progress project. This document is the
 authoritative state. It is written to be read once, top to bottom, before you touch code.
@@ -9,7 +9,7 @@ Written 2026-10-13. Previous model: Claude (Opus 5). The user is the human owner
 
 ## 1. What this project is
 
-**UltraCraft merges ULTRAKILL and Minecraft.**
+**MINEKILL merges ULTRAKILL and Minecraft.**
 
 - **Minecraft is the simulation engine.** It owns the player, physics, inventory, mining,
   block placing, combat, and saves.
@@ -67,19 +67,19 @@ ultrakill-mod/                   BepInEx 5 plugin, .NET Framework 4.7.2 (net472)
   src/SelfTest.cs                One-shot layout verification at handshake.
 
 minecraft-mod/                   Fabric mod for Minecraft 26.3
-  src/main/java/dev/ultracraft/UltraCraftClient.java   Tick entry, focus handling.
-  src/main/java/dev/ultracraft/InputApplier.java       Applies forwarded input.
-  src/main/java/dev/ultracraft/PlayerPublisher.java   Publishes player state.
-  src/main/java/dev/ultracraft/bridge/Bridge.java     Transport (Java side).
-  src/main/java/dev/ultracraft/bridge/Protocol.java   GENERATED. Do not edit.
-  src/main/java/dev/ultracraft/mixin/MinecraftMixin.java
-  src/main/java/dev/ultracraft/mixin/MouseHandlerMixin.java
-  src/main/java/dev/ultracraft/mixin/WindowMixin.java
+  src/main/java/dev/minekill/MinekillClient.java   Tick entry, focus handling.
+  src/main/java/dev/minekill/InputApplier.java       Applies forwarded input.
+  src/main/java/dev/minekill/PlayerPublisher.java   Publishes player state.
+  src/main/java/dev/minekill/bridge/Bridge.java     Transport (Java side).
+  src/main/java/dev/minekill/bridge/Protocol.java   GENERATED. Do not edit.
+  src/main/java/dev/minekill/mixin/MinecraftMixin.java
+  src/main/java/dev/minekill/mixin/MouseHandlerMixin.java
+  src/main/java/dev/minekill/mixin/WindowMixin.java
 
 ULTRAKILL/                       Read-only game install. Write only:
-                                 BepInEx/plugins/UltraCraft.ULTRAKILL.dll
+                                 BepInEx/plugins/Minekill.ULTRAKILL.dll
 UltraCraft/                      Minecraft instance. Write only:
-                                 minecraft/mods/ultracraft-minecraft-0.1.0.jar
+                                 minecraft/mods/minekill-minecraft-0.1.0.jar
 ```
 
 **Everything is untracked in git** (`git status` shows `??` for all of it). `.gitignore`
@@ -93,13 +93,13 @@ commits**. The user has never asked for git work; do not start committing unprom
 **ULTRAKILL side:**
 ```bash
 cd ultrakill-mod && dotnet build -c Release
-cp bin/Release/UltraCraft.ULTRAKILL.dll ../ULTRAKILL/BepInEx/plugins/
+cp bin/Release/Minekill.ULTRAKILL.dll ../ULTRAKILL/BepInEx/plugins/
 ```
 
 **Minecraft side:**
 ```bash
 cd minecraft-mod && gradle build --no-daemon
-cp build/libs/ultracraft-minecraft-0.1.0.jar "../UltraCraft/minecraft/mods/"
+cp build/libs/minekill-minecraft-0.1.0.jar "../UltraCraft/minecraft/mods/"
 ```
 
 **Always run after either:**
@@ -150,9 +150,9 @@ These are the things that will waste your afternoon if you don't know them.
 
 - **Wine 11.17**, user's own `~/.wine` prefix. ULTRAKILL runs under Wine. **No
   `WINEDLLOVERRIDES` are needed.** Wine maps `s:` → `/home`, so the same file is
-  `Z:\var\tmp\ultracraft.bridge` in UK and `/var/tmp/ultracraft.bridge` in MC.
-- **Bridge path**: `/var/tmp/ultracraft.bridge`. Override with env var
-  `ULTRACRAFT_BRIDGE` on either side. All home-directory guessing was deleted — every
+  `Z:\var\tmp\minekill.bridge` in UK and `/var/tmp/minekill.bridge` in MC.
+- **Bridge path**: `/var/tmp/minekill.bridge`. Override with env var
+  `MINEKILL_BRIDGE` on either side. All home-directory guessing was deleted — every
   mechanism was wrong.
 - **Minecraft 26.3 is UNOBFUSCATED.** Real Mojang names, no refmap. `MinecraftClient` is
   now `Minecraft`, `tick()` is `runTick(boolean)`, and the current screen is

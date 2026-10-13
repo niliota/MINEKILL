@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
-using UltraCraft.Bridge;
+using Minekill.Bridge;
 
-namespace UltraCraft
+namespace Minekill
 {
     /// <summary>
     /// Publishes ULTRAKILL's environment colliders around the player into the COLLISION

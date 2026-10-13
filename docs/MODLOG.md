@@ -1,4 +1,4 @@
-# UltraCraft — MODLOG
+# MINEKILL — MODLOG
 
 Running log. Newest at the bottom. Not game-derived content — safe to commit.
 
@@ -84,7 +84,7 @@ required or Loom refuses to configure, and the empty intermediary set is what sa
 
 Reading from a live JVM while ULTRAKILL ran under Wine:
 
-    path      = .../ultracraft.bridge
+    path      = .../minekill.bridge
     connected = true
     mc pid    = 127014
     uk pid    = 632
@@ -195,8 +195,8 @@ because the answer depends on how the prefix was built:
   in the other.
 
 **Fixed by deleting all of it.** `Z:` is the one anchor Wine always provides: it is the
-filesystem root. Both sides now use `/var/tmp/ultracraft.bridge` — ULTRAKILL as
-`Z:\var\tmp\ultracraft.bridge`. No username, no home, no prefix assumptions.
+filesystem root. Both sides now use `/var/tmp/minekill.bridge` — ULTRAKILL as
+`Z:\var\tmp\minekill.bridge`. No username, no home, no prefix assumptions.
 
 **2. A dead process reported as connected.** Minecraft logged
 `HANDSHAKE OK, ULTRAKILL pid 32` for a process that had been hard-killed twenty minutes
@@ -468,21 +468,21 @@ constant 300, and nothing consumes the data on the ULTRAKILL side except the sta
 ## 2026-10-08 — Bridge path fix, and how the Wine default was actually found
 
 **The bug that caused playtest B.** Both processes fell back to the *relative* name
-`ultracraft.bridge`, and each resolved it against its own working directory:
+`minekill.bridge`, and each resolved it against its own working directory:
 
 | Process | File it opened | Contained |
 |---|---|---|
-| ULTRAKILL | `ULTRAKILL/ultracraft.bridge` | `ukPid=864`, `mcPid=0` |
-| Minecraft | `.../Instances/UltraCraft/minecraft/ultracraft.bridge` | `mcPid=128986`, `ukPid=0` |
+| ULTRAKILL | `ULTRAKILL/minekill.bridge` | `ukPid=864`, `mcPid=0` |
+| Minecraft | `.../Instances/UltraCraft/minecraft/minekill.bridge` | `mcPid=128986`, `ukPid=0` |
 
 Both were alive and healthy; they simply never touched the same bytes. That is why a relative
 default must never be used for a shared file.
 
 **Fixed:** both sides now default to an absolute path under the user's home,
-`~/.ultracraft/ultracraft.bridge`. `ULTRACRAFT_BRIDGE` remains as an override but is no longer
+`~/.minekill/minekill.bridge`. `MINEKILL_BRIDGE` remains as an override but is no longer
 needed. Verified with zero configuration:
 
-    [Info   :UltraCraft] bridge open at Z:\home\<user>\.ultracraft\ultracraft.bridge (pid 640, ...)
+    [Info   :MINEKILL] bridge open at Z:\home\<user>\.minekill\minekill.bridge (pid 640, ...)
 
     mc pid    = 134037
     uk pid    = 640
@@ -509,7 +509,7 @@ both wrong.** Measured, not assumed:
 reach `LogOutput.log` when `[Logging.Disk] WriteUnityLog = true`, which ships false. The plugin
 now uses BepInEx's own log source, and `WriteUnityLog` was enabled in the project copy.
 
-**Added `~/.ultracraft/ultrakill-status.txt`**, rewritten by the plugin from `Update`. BepInEx's
+**Added `~/.minekill/ultrakill-status.txt`**, rewritten by the plugin from `Update`. BepInEx's
 disk logger stops flushing under Wine, so this is the only dependable way to see the ULTRAKILL
 side's view of the bridge. It is also what revealed the main-loop hang above.
 
@@ -1473,8 +1473,8 @@ New session (Opus 5.5) took over from HANDOVER.md. No behaviour changes.
   fixed; protocol regenerated (comments only), `check-layout.sh` passes.
 - **The protocol files' 2026-10-13 timestamps** came from `check-layout.sh`, which regenerates
   them. Not a layout change.
-- README, SETUP and CONTRACT still described `~/.ultracraft/` and `bridge/` bridge paths,
-  required `ULTRACRAFT_BRIDGE`, said ULTRAKILL "does not tick while unfocused" (the plugin
+- README, SETUP and CONTRACT still described `~/.minekill/` and `bridge/` bridge paths,
+  required `MINEKILL_BRIDGE`, said ULTRAKILL "does not tick while unfocused" (the plugin
   fixes that), and described the voxelisation plan that the D1 collision direction replaced.
   CONTRACT's message table listed a `SLOT_VOXEL` that does not exist. All updated.
 - Recorded that dash/slide do not exist yet (the puppet disables `NewMovement` wholesale), and
@@ -1761,7 +1761,7 @@ available of: Unlit/Transparent Cutout, Legacy Cutout VertexLit, Legacy Cutout D
 Unlit/Texture, Standard, Sprites/Default. None of those is known to multiply vertex colour, so
 grass/leaf tint and face shading may be missing until a better shader is chosen from the log.
 
-**STREAM file** (`/var/tmp/ultracraft.stream`, 64 MB ring + 64-byte header; constants in
+**STREAM file** (`/var/tmp/minekill.stream`, 64 MB ring + 64-byte header; constants in
 generate.py, covered by check-layout.sh). SPSC: Minecraft owns HEAD and ring, ULTRAKILL owns
 TAIL; 8-aligned records `u32 type, u32 len, payload`; PAD record instead of wrapping; writes
 never block (returns false, caller retries). Resync: ULTRAKILL sets TAIL=HEAD and bumps
@@ -2412,3 +2412,16 @@ User confirmed: fire fixed, water flows/pools/places on ULTRAKILL geometry, cut-
   read stone for an air cell ULTRAKILL geometry reaches into. Target checked in bytecode.
 
 User confirmed: chest/banner/sign cracks; arrows, tridents and thrown projectiles hit and stick on ULTRAKILL geometry.
+
+### Renamed: UltraCraft -> MINEKILL
+
+User's request (they rename the GitHub repo themselves). Package `dev.ultracraft` -> `dev.minekill`,
+mod id `minekill`, `MinekillClient`, `minekill.client.mixins.json`, mixin member prefix `minekill$`,
+C# namespace `Minekill` / assembly `Minekill.ULTRAKILL.dll`, BepInEx GUID `dev.minekill.ultrakill`,
+jar `minekill-minecraft`, bridge/stream files `/var/tmp/minekill.bridge` / `.stream`, env var
+`MINEKILL_BRIDGE`, log prefix `[MINEKILL]`. Display text says MINEKILL. The local Minecraft
+instance folder is still called `UltraCraft/` on disk, so paths to it and its .gitignore entry
+keep that name. The old-named jar and DLL were removed from the game folders when the new ones
+went in (both loading at once would double every hook).
+
+User confirmed: everything works after the rename.
