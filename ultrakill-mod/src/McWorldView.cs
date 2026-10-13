@@ -789,6 +789,10 @@ namespace UltraCraft
                         // blocks (fire, flowers, grass overlays) need a real alpha test too.
                         var mc = new Material(_modelTemplate) { hideFlags = HideFlags.HideAndDontSave, name = AlphaTestedName };
                         SetAtlas(mc);
+                        // Back faces culled, as Minecraft's terrain is: fire and other two-sided
+                        // planes are built as two coincident opposite quads, which with culling
+                        // off z-fought (the template comes from an enemy material with cull off).
+                        if (mc.HasProperty("_CullMode")) mc.SetFloat("_CullMode", (float)CullMode.Back);
                         _candidates[l].Add(mc);
                     }
                     int preferred = PreferredDefault[l] == null ? -1 : _candidates[l].FindIndex(m => m.name == PreferredDefault[l]);

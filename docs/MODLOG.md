@@ -2384,3 +2384,22 @@ User confirmed: entities collide with ULTRAKILL walls and floors. Pathfinding do
   methods containing the redirected calls).
 
 User confirmed: Minecraft loads; animated sprites (water, lava, fire) work; chests etc. in the hotbar; projectiles stick to ULTRAKILL geometry; performance fine. Open: fire z-fighting, no cracks on chests (beds fine), water ignores ULTRAKILL geometry (no placing, no flow), stuck projectiles keep rotating.
+
+### Fire z-fighting, chest cracks, fluids, stuck arrows
+
+- **Fire z-fighting:** the alpha-tested cut-out material comes from an enemy material with culling
+  off; fire's planes are pairs of coincident opposite quads, so both drew and fought. The cut-out
+  block candidate now culls back faces (_CullMode = Back), like Minecraft's terrain. Models keep
+  the template's culling.
+- **Chest cracks:** block entities have RenderShape ENTITYBLOCK_ANIMATED and no block model to
+  crack (Minecraft cracks them in their own renderer). Their outline shape boxes get crack faces.
+- **Fluids:** FlowingFluidMixin makes `canPassThroughWall` and `canHoldSpecificFluid` refuse cells
+  ULTRAKILL fills (UkCollision.blocksCell), so water/lava pool on, run along and pour off
+  ULTRAKILL geometry. ItemMixin redirects the `Level.clip` in `Item.getPlayerPOVHitResult`
+  (buckets, boats, lily pads, bottles) to also hit ULTRAKILL surfaces (ProjectileClip
+  .clipNoBorder), so buckets empty onto them.
+- **Stuck arrows dropping:** `AbstractArrow.shouldFall` tests `Level.noCollision` around the tip,
+  blind to ULTRAKILL boxes, so a stuck arrow fell and swung to point down. Redirected to also
+  count them.
+
+User confirmed: fire fixed, water flows/pools/places on ULTRAKILL geometry, cut-out blocks fine. Still open: chest/banner cracks, arrows keep turning.

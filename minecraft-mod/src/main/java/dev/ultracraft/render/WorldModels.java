@@ -150,11 +150,16 @@ public final class WorldModels {
 
     private void crack(Minecraft mc, BlockBreakingRenderState s) {
         try {
-            if (s.blockState().getRenderShape() != RenderShape.MODEL) return;
             int stage = Math.clamp(s.progress(), 0, 9);
             int key = GuiTextures.keyForLocation(mc, Identifier.withDefaultNamespace("textures/block/destroy_stage_" + stage + ".png"));
             if (key < 0) return;
             var pos = s.blockPos();
+            if (s.blockState().getRenderShape() != RenderShape.MODEL) {
+                // Block entities (chests, signs, banners, ...) have no block model to crack; their
+                // renderer would draw the crumbling overlay. Crack their outline shape instead.
+                for (var box : s.blockState().getShape(mc.level, pos).toAabbs()) crackBox(box.move(pos), key);
+                return;
+            }
             var offset = s.blockState().getOffset(pos);
             var model = mc.getModelManager().getBlockStateModelSet().get(s.blockState());
             RandomSource random = RandomSource.create(s.blockState().getSeed(pos));
@@ -192,6 +197,38 @@ public final class WorldModels {
                 crackFailureLogged = true;
                 LoggerFactory.getLogger("ultracraft").warn("[UltraCraft] world models: crack capture failed: {}", e.toString());
             }
+        }
+    }
+
+    /** Six crack faces over a box (world coords), lifted a hair, UVs laid over each face. */
+    private void crackBox(net.minecraft.world.phys.AABB b, int key) {
+        float e = CRACK_LIFT;
+        float x0 = (float) b.minX - e, y0 = (float) b.minY - e, z0 = (float) b.minZ - e;
+        float x1 = (float) b.maxX + e, y1 = (float) b.maxY + e, z1 = (float) b.maxZ + e;
+        float bx = (float) Math.floor(b.minX), by = (float) Math.floor(b.minY), bz = (float) Math.floor(b.minZ);
+        float[][] faces = {
+            {x0, y1, z0, x0, y1, z1, x1, y1, z1, x1, y1, z0},   // up
+            {x0, y0, z1, x0, y0, z0, x1, y0, z0, x1, y0, z1},   // down
+            {x1, y1, z0, x1, y0, z0, x0, y0, z0, x0, y1, z0},   // north
+            {x0, y1, z1, x0, y0, z1, x1, y0, z1, x1, y1, z1},   // south
+            {x0, y1, z0, x0, y0, z0, x0, y0, z1, x0, y1, z1},   // west
+            {x1, y1, z1, x1, y0, z1, x1, y0, z0, x1, y1, z0},   // east
+        };
+        float[] x = new float[4], y = new float[4], z = new float[4], u = new float[4], v = new float[4];
+        for (int f = 0; f < 6; f++) {
+            for (int k = 0; k < 4; k++) {
+                x[k] = faces[f][k * 3]; y[k] = faces[f][k * 3 + 1]; z[k] = faces[f][k * 3 + 2];
+                float lx = x[k] - bx, ly = y[k] - by, lz = z[k] - bz;
+                switch (f) {
+                    case 0 -> { u[k] = lx; v[k] = lz; }
+                    case 1 -> { u[k] = lx; v[k] = 1 - lz; }
+                    case 2 -> { u[k] = 1 - lx; v[k] = 1 - ly; }
+                    case 3 -> { u[k] = lx; v[k] = 1 - ly; }
+                    case 4 -> { u[k] = lz; v[k] = 1 - ly; }
+                    default -> { u[k] = 1 - lz; v[k] = 1 - ly; }
+                }
+            }
+            put(x, y, z, u, v, 0xFFFFFFFF, key | Protocol.MODEL_TEX_MULTIPLY);
         }
     }
 
