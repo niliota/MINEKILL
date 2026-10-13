@@ -452,10 +452,11 @@ EVENT_KINDS = {
     "PLAYER_HURT": 4,
     "LEVEL_LOADED": 5,
     "PLAYER_RESPAWN": 6,
-    # Keyboard passthrough (UK_EVENTS ring): a = SDL3 scancode (Minecraft 26.x input is SDL3:
-    # InputConstants.KEY_ESCAPE = 41, KEY_E = 8, ...; NOT GLFW codes), b = action (0 release,
-    # 1 press, 2 repeat) | SDL modifier bits << 8 (lshift 0x1, rshift 0x2, lctrl 0x40, rctrl 0x80,
-    # lalt 0x100, ralt 0x200; InputConstants.MOD_*).
+    # Keyboard passthrough (UK_EVENTS ring). Minecraft 26.x input is SDL3 (not GLFW): a KeyEvent
+    # carries the SDL scancode (key bindings, isEscape: InputConstants.KEY_ESCAPE = 41) AND the SDL
+    # keycode (text editing: EditBox switches on shortcutKey(), e.g. 8 = Backspace).
+    # a = SDL keycode; b = action (0 release, 1 press, 2 repeat) | SDL modifier bits << 8
+    # (lshift 0x1, rshift 0x2, lctrl 0x40, rctrl 0x80, lalt 0x100, ralt 0x200) | scancode << 22.
     "KEY": 7,
     # Typed character (UK_EVENTS ring): a = Unicode code point.
     "CHAR": 8,

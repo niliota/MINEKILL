@@ -2180,3 +2180,28 @@ LCtrl 224, LShift 225, LAlt 226, RCtrl 228, RShift 229, RAlt 230); SDL modifier 
 screen diagnostics stay for one confirmation run.
 
 User confirmed: keyboard and mouse passthrough work (inventory, chat, commands, pause). Open: Backspace does nothing; inventory background panel not rendered.
+
+### Backspace and standalone GUI textures
+
+- **Backspace / Delete / arrows in text fields.** A 26.x `KeyEvent` carries both the SDL scancode
+  (bindings, `isEscape`) and the SDL keycode (`shortcutKey()`, which `EditBox` switches on: 8
+  Backspace, 127 Delete, 0x4000004F Right...; verified with javap). We passed keycode 0. The KEY
+  event now packs a = SDL keycode, b = action | mods << 8 | scancode << 22; ULTRAKILL derives the
+  keycode by SDL's rule (printable = US character, else scancode | 1 << 30).
+- **Inventory / container / menu backgrounds.** These are standalone PNG textures, not atlas
+  sprites, so they were skipped. Their GPU texture label is the resource path; `GuiTextures` now
+  reads that PNG from Minecraft's resource manager (player's install / resource packs), mirrors it
+  whole and streams it like a font sheet. GUI textures in ULTRAKILL now use Repeat wrap, since menu
+  backgrounds tile with UVs beyond 1.
+
+User: ULTRAKILL's view "completely broken"; a translucent overlay with a stray "Crafting" label while
+neither game was in a world. Causes and fixes:
+- `misc/vignette.png` became mirrorable, and the vignette is drawn with a multiply blend; replayed
+  with alpha blending it is an opaque full-screen sheet. GuiCapture now keeps only elements whose
+  pipeline blends as translucent / premultiplied / invert, and logs skipped pipelines once.
+- Capture now also requires `mc.level != null` (title screen, world list: empty table).
+- HudView ignores a GUI table older than 2 s (a stopped Minecraft or a previous session's bridge
+  file otherwise leaves its last frame on screen).
+
+User confirmed: Backspace/editing keys work, inventory and menu backgrounds render, the whole GUI
+is replayed correctly, and ULTRAKILL's view is intact. Temporary key and screen diagnostics removed.

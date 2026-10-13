@@ -77,11 +77,48 @@ public final class GuiTextures {
         if (k != null) return k;
         Mirror m = MIRRORS.get(t);
         if (m != null) return m.key;
+        Mirror loaded = loadFromResources(mc, t);
+        if (loaded != null) return loaded.key;
         if (UNKNOWN_LOGGED.add(t.getLabel())) {
             LOG.info("[UltraCraft] gui: texture '{}' ({}x{}) is not mirrored; its quads are skipped",
                     t.getLabel(), t.getWidth(0), t.getHeight(0));
         }
         return -1;
+    }
+
+    /**
+     * Standalone GUI textures (the inventory and container backgrounds, menu backgrounds, title
+     * logos) are plain PNGs, not atlas sprites. Their GPU texture's label is the resource path, so
+     * the same PNG is read from Minecraft's resource manager (the player's own install and resource
+     * packs) once, mirrored whole and streamed like a font sheet. Textures that are not resources
+     * (skins, maps) stay unmirrored.
+     */
+    private static Mirror loadFromResources(Minecraft mc, GpuTexture t) {
+        String label = t.getLabel();
+        if (label == null || !label.endsWith(".png") || UNKNOWN_LOGGED.contains(label)) return null;
+        var id = net.minecraft.resources.Identifier.tryParse(label);
+        if (id == null) return null;
+        var res = mc.getResourceManager().getResource(id);
+        if (res.isEmpty()) return null;
+        try (var in = res.get().open(); NativeImage img = NativeImage.read(in)) {
+            Mirror m = new Mirror(nextKey++, img.getWidth(), img.getHeight());
+            for (int y = 0; y < m.h; y++) {
+                for (int x = 0; x < m.w; x++) {
+                    int argb = img.getPixel(x, y), o = (y * m.w + x) * 4;
+                    m.rgba[o] = (byte) (argb >> 16);
+                    m.rgba[o + 1] = (byte) (argb >> 8);
+                    m.rgba[o + 2] = (byte) argb;
+                    m.rgba[o + 3] = (byte) (argb >>> 24);
+                }
+            }
+            MIRRORS.put(t, m);
+            LOG.info("[UltraCraft] gui: mirrored '{}' ({}x{}) from resources", label, m.w, m.h);
+            return m;
+        } catch (java.io.IOException | RuntimeException e) {
+            UNKNOWN_LOGGED.add(label);
+            LOG.warn("[UltraCraft] gui: could not load '{}' from resources: {}", label, e.toString());
+            return null;
+        }
     }
 
     // Reflection into BitmapProvider's private glyph types (package-private record + holder).

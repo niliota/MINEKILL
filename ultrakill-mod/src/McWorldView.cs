@@ -269,7 +269,8 @@ namespace UltraCraft
                 if (tex != null) UnityEngine.Object.Destroy(tex);
                 tex = new Texture2D(w, h, TextureFormat.RGBA32, false)
                 {
-                    filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Clamp,
+                    // Repeat: menu backgrounds tile their texture across the screen (UVs beyond 1).
+                    filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Repeat,
                     hideFlags = HideFlags.HideAndDontSave, name = $"UltraCraft.GuiTexture{key}",
                 };
                 tex.SetPixels32(new Color32[w * h]);

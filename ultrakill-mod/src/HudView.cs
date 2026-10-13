@@ -51,6 +51,10 @@ namespace UltraCraft
         public void Tick()
         {
             int n = _bridge.ReadGuiTable(_table);
+            // A table Minecraft stopped writing (closed, crashed, a previous session's bridge file)
+            // is not shown: it would freeze its last frame on screen.
+            if (n >= 0 && DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - BitConverter.ToInt64(_table, Protocol.TBL_GUI_OFF_TICKTIMESTAMP) > 2000)
+                n = 0;
             if (n >= 0)
             {
                 _count = n;
