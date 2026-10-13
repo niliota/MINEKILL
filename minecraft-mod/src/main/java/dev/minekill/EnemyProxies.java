@@ -100,6 +100,7 @@ public final class EnemyProxies {
                 if (proxy == null) continue;
                 proxies.put(id, proxy);
                 UK_ID.put(proxy.getId(), id);
+                BY_UK_ID.put(id, proxy);
             }
             proxy.snapTo(data[o], data[o + 1], data[o + 2]);
             proxy.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
@@ -125,6 +126,9 @@ public final class EnemyProxies {
         h.setSilent(true);
         h.setNoGravity(true);
         h.setPersistenceRequired();
+        // Death messages and the like name the attacker: not "Husk".
+        h.setCustomName(net.minecraft.network.chat.Component.literal("an ULTRAKILL enemy"));
+        h.setCustomNameVisible(false);
         h.noPhysics = true;
         // A husk is a zombie: when hit on Hard it may call reinforcements. Never.
         var reinforcements = h.getAttribute(Attributes.SPAWN_REINFORCEMENTS_CHANCE);
@@ -135,13 +139,22 @@ public final class EnemyProxies {
     }
 
     private void forget(Entity e) {
-        UK_ID.remove(e.getId());
+        Integer ukId = UK_ID.remove(e.getId());
+        if (ukId != null) BY_UK_ID.remove(ukId);
         COOLDOWN.remove(e.getId());
     }
 
     private void removeAll() {
         for (Husk h : proxies.values()) { forget(h); h.discard(); }
         proxies.clear();
+    }
+
+    private static final Map<Integer, Husk> BY_UK_ID = new ConcurrentHashMap<>();
+
+    /** The proxy standing in for ULTRAKILL enemy {@code ukId}, or null (server thread). */
+    public static Husk proxyFor(int ukId) {
+        Husk h = BY_UK_ID.get(ukId);
+        return h != null && !h.isRemoved() ? h : null;
     }
 
     /** For the client's copy of a proxy (same entity id in single-player), which has no tags. */

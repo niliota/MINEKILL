@@ -303,7 +303,7 @@ public final class InputApplier {
      * out of 20, so it is divided by 5 and dealt as generic damage on the server player. Armour,
      * enchantments, potions, invulnerability frames, totems and death are Minecraft's.
      */
-    private static void hurtPlayer(Minecraft mc, int ukDamage, float fromX, float fromY, float fromZ) {
+    private static void hurtPlayer(Minecraft mc, int ukDamage, int kind, int attackerId) {
         var server = mc.getSingleplayerServer();
         if (server == null || mc.player == null) return;
         java.util.UUID id = mc.player.getUUID();
@@ -311,14 +311,30 @@ public final class InputApplier {
         server.execute(() -> {
             var sp = server.getPlayerList().getPlayer(id);
             if (sp == null || !sp.isAlive()) return;
-            var generic = sp.level().damageSources().generic();
-            // With a position, a raised shield facing it blocks the hit (generic damage does not
-            // bypass shields; it only had no direction to be blocked from).
-            var source = Float.isNaN(fromX) ? generic
-                    : new net.minecraft.world.damagesource.DamageSource(generic.typeHolder(), new net.minecraft.world.phys.Vec3(fromX, fromY, fromZ));
+            var sources = sp.level().damageSources();
+            // Attributed to the attacking enemy's proxy, as a mob's attack, projectile or
+            // explosion. These damage types do not bypass armour or shields (generic does: it is in
+            // #bypasses_armor, which #bypasses_shield includes), and the proxy's position is the
+            // direction a shield blocks from. Unknown attacker: a mob attack with no direction.
+            var proxy = dev.minekill.EnemyProxies.proxyFor(attackerId);
+            net.minecraft.world.damagesource.DamageSource source;
+            if (proxy == null) source = new net.minecraft.world.damagesource.DamageSource(sources.mobAttack(sp).typeHolder());
+            else if (kind == 2) source = sources.explosion(proxy, proxy);
+            else if (kind == 1) source = sources.mobProjectile(proxy, proxy);
+            else source = sources.mobAttack(proxy);
+            float before = sp.getHealth();
+            boolean blocking = sp.isBlocking();
             sp.hurtServer(sp.level(), source, amount);
+            if (hurtsLogged < 40) {
+                hurtsLogged++;
+                LOG.info("[MINEKILL] combat: ULTRAKILL {} hit {} -> {} by {} | blocking={} | health {} -> {}",
+                        kind == 2 ? "explosion" : kind == 1 ? "projectile" : "melee", ukDamage, amount,
+                        proxy == null ? "unknown enemy" : "enemy " + attackerId, blocking, before, sp.getHealth());
+            }
         });
     }
+
+    private static int hurtsLogged;
 
     private void forwardButton(Minecraft mc, int button, boolean pressed) {
         try {
@@ -414,7 +430,7 @@ public final class InputApplier {
                 } else if (e.kind == Protocol.EV_CHAR) {
                     mc.keyboardHandler.charTyped(handle, new net.minecraft.client.input.CharacterEvent(e.a));
                 } else if (e.kind == Protocol.EV_PLAYER_HURT) {
-                    hurtPlayer(mc, Math.abs(e.a), Float.intBitsToFloat(e.b), e.c, e.d);
+                    hurtPlayer(mc, e.a & 0xFFFF, e.a >>> 16, e.b);
                 } else if (e.kind == Protocol.EV_TELEPORT) {
                     PlayerSafety.requestTeleport(new net.minecraft.world.phys.Vec3(Float.intBitsToFloat(e.a), e.c, e.d));
                 } else if (e.kind == Protocol.EV_MOUSE_BUTTON) {

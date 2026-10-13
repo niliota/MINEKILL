@@ -2527,3 +2527,15 @@ Balance data from the log: Filth health 0.5, Stray 1.5 - every Minecraft hit kil
   ULTRAKILL's player untouched would raise Minecraft's player by the drop height instead.
 
 User confirmed: combat works (melee, ranged, potions, taking damage, death and respawn/restart, grace window, hidden proxies). Shield still does not block.
+- **Shield, real cause:** the diagnostic showed blocking=true and hits from inside the 90 degree
+  cone still doing full damage. `minecraft:generic` is in `#bypasses_armor`, and
+  `#bypasses_shield` includes `#bypasses_armor` (the earlier check read only the top level of
+  the shield tag): ULTRAKILL hits ignored both shields and armour. PLAYER_HURT now carries the
+  attacking enemy's id and a kind (melee / projectile / explosion); the attacker is the nearest
+  enemy, or for a projectile within 4 blocks the enemy best lined up behind its flight. Minecraft
+  builds `mobAttack(proxy)`, `mobProjectile(proxy, proxy)` or `explosion(proxy, proxy)`, so the
+  shield blocks from the proxy's direction, armour reduces it, blocking knocks the proxy back and
+  thorns hurts the enemy. These types scale with difficulty (Easy halves, Hard x1.5). Proxies are
+  named "an ULTRAKILL enemy" for death messages.
+
+User confirmed: shield blocks ULTRAKILL hits, armour reduces them, death message names an ULTRAKILL enemy; keep the difficulty scaling.
