@@ -521,6 +521,33 @@ public final class Bridge implements AutoCloseable {
     }
 
     /**
+     * Write the HAND table under its seqlock: per vertex x,y,z (view space), u,v, rgba and texture
+     * key; {@code count} vertices, 4 per quad.
+     */
+    public void writeHandTable(long ts, int count, float fov, float[] xyz, float[] uv, int[] rgba, int[] tex) {
+        if (!connected) return;
+        if (count > Protocol.TBL_HAND_CAPACITY) count = Protocol.TBL_HAND_CAPACITY & ~3;
+        int b = Protocol.TBL_HAND_OFFSET;
+        beginWrite(b + Protocol.TBL_HAND_OFF_SEQ);
+        buf.putLong(b + Protocol.TBL_HAND_OFF_TICKTIMESTAMP, ts);
+        buf.putInt(b + Protocol.TBL_HAND_OFF_COUNT, count);
+        buf.putFloat(b + Protocol.TBL_HAND_OFF_FOV, fov);
+        int r0 = b + Protocol.TBL_HAND_OFF_RECORDS;
+        for (int i = 0; i < count; i++) {
+            int at = r0 + i * Protocol.TBL_HAND_RECORD_SIZE;
+            buf.putFloat(at + Protocol.TBL_HAND_REC_OFF_X, xyz[i * 3]);
+            buf.putFloat(at + Protocol.TBL_HAND_REC_OFF_Y, xyz[i * 3 + 1]);
+            buf.putFloat(at + Protocol.TBL_HAND_REC_OFF_Z, xyz[i * 3 + 2]);
+            buf.putFloat(at + Protocol.TBL_HAND_REC_OFF_U, uv[i * 2]);
+            buf.putFloat(at + Protocol.TBL_HAND_REC_OFF_V, uv[i * 2 + 1]);
+            buf.putInt(at + Protocol.TBL_HAND_REC_OFF_RGBA, rgba[i]);
+            buf.putInt(at + Protocol.TBL_HAND_REC_OFF_TEX, tex[i]);
+        }
+        java.lang.invoke.VarHandle.releaseFence();
+        endWrite(b + Protocol.TBL_HAND_OFF_SEQ);
+    }
+
+    /**
      * Write the PARTICLES table under its seqlock: x,y,z,size,u0,v0,u1,v1 (floats, 8 per particle)
      * and rgba (one int per particle).
      */

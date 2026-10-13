@@ -27,8 +27,7 @@ import org.slf4j.LoggerFactory;
  *       known body instead of whatever Minecraft's player was doing at the time (in the
  *       2026-10-13 playtest: falling through the void at y=-115, -60 and -129).</li>
  *   <li><b>Hold.</b> While held, gravity is off and velocity is zeroed every tick. A spawn
- *       hold ends when the player presses a movement key. H in ULTRAKILL toggles a hard
- *       lock, which movement keys do not break (InputApplier drops them while locked).</li>
+ *       hold ends when the player presses a movement key.</li>
  *   <li><b>Void net.</b> Below the world floor the player is sent back to {@link #SPAWN} and
  *       held, before void damage starts ({@code minY - 64}). Spawn is the anchor, so the
  *       ULTRAKILL puppet lands back at the level's spawn point too, with no re-anchor.</li>
@@ -58,33 +57,26 @@ final class PlayerSafety {
             | Protocol.KEY_LEFT | Protocol.KEY_RIGHT | Protocol.KEY_JUMP | Protocol.KEY_SNEAK;
 
     private static volatile int spawnAck;
-    private static volatile boolean locked;
 
     private final Bridge.InputState in = new Bridge.InputState();
     private int handledRequest;
     private int pendingAck;
     private boolean spawnHold;
-    private boolean prevToggle;
     private boolean wasHeld;
-    private Vec3 lockPos;
 
     /** Last spawn request completed, for PLAYER.spawnAck. */
     static int spawnAck() { return spawnAck; }
-
-    /** True while H-locked; InputApplier drops movement keys. */
-    static boolean locked() { return locked; }
 
     void tick(Minecraft mc, Bridge bridge, boolean ukAlive) {
         LocalPlayer player = mc.player;
         if (player == null) return;
 
-        if (!ukAlive && (spawnHold || locked || pendingAck != 0)) {
+        if (!ukAlive && (spawnHold || pendingAck != 0)) {
             // The release keys come from ULTRAKILL; without it, a held player could never
             // move again. Hand the body back to plain Minecraft.
             spawnHold = false;
-            locked = false;
             pendingAck = 0;
-            LOG.info("[UltraCraft] safety: ULTRAKILL not live, released hold/lock");
+            LOG.info("[UltraCraft] safety: ULTRAKILL not live, released hold");
         }
 
         // 1. Spawn sync.
@@ -101,15 +93,8 @@ final class PlayerSafety {
             pendingAck = 0;
         }
 
-        // 2. Hold / lock, from ULTRAKILL's forwarded keys.
+        // 2. Spawn hold, released by ULTRAKILL's forwarded movement keys.
         boolean haveInput = ukAlive && bridge.readInput(in);
-        boolean toggle = haveInput && (in.keys & Protocol.KEY_HOLD_TOGGLE) != 0;
-        if (toggle && !prevToggle) {
-            locked = !locked;
-            lockPos = locked ? player.position() : null;
-            LOG.info("[UltraCraft] safety: H pressed, player {}", locked ? "LOCKED in place" : "unlocked");
-        }
-        prevToggle = toggle;
         if (spawnHold && pendingAck == 0 && haveInput && (in.keys & MOVEMENT_KEYS) != 0) {
             spawnHold = false;
             LOG.info("[UltraCraft] safety: movement key pressed, spawn hold released");
@@ -119,17 +104,13 @@ final class PlayerSafety {
         if (player.getY() < player.level().getMinY() - NET_BELOW_MIN_Y) {
             teleport(mc, player, SPAWN, "void net at y=" + String.format("%.1f", player.getY()));
             spawnHold = true;
-            if (locked) lockPos = SPAWN;
         }
 
-        boolean held = spawnHold || locked || pendingAck != 0;
+        boolean held = spawnHold || pendingAck != 0;
         if (held) {
             player.setNoGravity(true);
             player.setDeltaMovement(Vec3.ZERO);
             player.resetFallDistance();
-            if (locked && lockPos != null && player.position().distanceToSqr(lockPos) > 1e-6) {
-                player.setPos(lockPos);
-            }
         } else if (wasHeld) {
             player.setNoGravity(false);
         }
@@ -138,8 +119,8 @@ final class PlayerSafety {
 
     /** One-line state for the periodic log. */
     String describe() {
-        return String.format("safety request=%d ack=%d spawnHold=%b locked=%b",
-                handledRequest, spawnAck, spawnHold, locked);
+        return String.format("safety request=%d ack=%d spawnHold=%b",
+                handledRequest, spawnAck, spawnHold);
     }
 
     private static void teleport(Minecraft mc, LocalPlayer player, Vec3 to, String why) {

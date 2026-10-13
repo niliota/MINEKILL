@@ -199,6 +199,20 @@ TABLES = [
         ("rgba","u32", "colour, r in the low byte"),
         ("tex","u32", "GUI_TEX_* key"),
      ]),
+    ("HAND", "Minecraft -> ULTRAKILL",
+     "Minecraft's first-person hands and held items this frame: posed, lit quads in Minecraft view space (camera looks down -z, y up), far first", 8192, [
+        ("tickTimestamp","i64", "epoch ms of the frame"),
+        ("count","u32", "valid vertices; 4 per quad"),
+        ("fov","f32", "Minecraft's hand field of view, vertical degrees (it draws hands with their own projection)"),
+     ], [
+        ("x","f32", "Minecraft view space, blocks"),
+        ("y","f32", ""),
+        ("z","f32", ""),
+        ("u","f32", "texture coordinates"),
+        ("v","f32", ""),
+        ("rgba","u32", "colour with lighting applied, r in the low byte"),
+        ("tex","u32", "GUI_TEX_* key"),
+     ]),
     ("PARTICLES", "Minecraft -> ULTRAKILL",
      "Minecraft's live block particles (TerrainParticle), interpolated, for ULTRAKILL to draw as billboards", 2048, [
         ("tickTimestamp","i64", "epoch ms of the frame that sampled them"),
@@ -441,8 +455,7 @@ KEY_FLAGS = {
     "KEY_JUMP":     1 << 4,
     "KEY_SNEAK":    1 << 5,
     "KEY_SPRINT":   1 << 6,
-    # H in ULTRAKILL (unbound there by default): lock/unlock the Minecraft player in place.
-    "KEY_HOLD_TOGGLE": 1 << 7,
+    # 1 << 7 was the H lock toggle (removed: spawn sync and the void net made it unnecessary).
 }
 
 EVENT_KINDS = {

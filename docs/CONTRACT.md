@@ -136,7 +136,7 @@ from `GameManager` at runtime during the first canary and recorded here.
   `ukSpawnRequest`, and waits. MC teleports its player to its fixed spawn spot
   (1000.5, 128, 1000.5), zeroes velocity, holds it still, and echoes the request in
   `PLAYER.spawnAck`. Only then does UK anchor, so every level starts from the same still body.
-  The hold ends on the first movement key; H toggles a hard lock. Below the world floor MC
+  The hold ends on the first movement key. Below the world floor MC
   returns the player to spawn (the anchor) instead of letting the void kill it. Once collision injection exists,
   UK will publish the level's collision shapes; **until they have arrived, MC must hold the
   player still rather than let them fall through the void.** (Original plan was voxel data via

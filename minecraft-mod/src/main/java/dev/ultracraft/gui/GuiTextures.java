@@ -77,7 +77,7 @@ public final class GuiTextures {
         if (k != null) return k;
         Mirror m = MIRRORS.get(t);
         if (m != null) return m.key;
-        Mirror loaded = loadFromResources(mc, t);
+        Mirror loaded = loadFromResources(mc, t, t.getLabel());
         if (loaded != null) return loaded.key;
         if (UNKNOWN_LOGGED.add(t.getLabel())) {
             LOG.info("[UltraCraft] gui: texture '{}' ({}x{}) is not mirrored; its quads are skipped",
@@ -87,31 +87,50 @@ public final class GuiTextures {
     }
 
     /**
+     * The key for a texture Minecraft binds by location (entity models: the player's skin, armour),
+     * or -1. The location is also the resource path, in case the GPU texture's label is not.
+     */
+    public static synchronized int keyForLocation(Minecraft mc, net.minecraft.resources.Identifier id) {
+        GpuTexture t;
+        net.minecraft.client.renderer.texture.AbstractTexture abs;
+        try {
+            abs = mc.getTextureManager().getTexture(id);
+            t = abs.getTexture();
+        } catch (RuntimeException notReady) {
+            return -1;
+        }
+        Mirror m = MIRRORS.get(t);
+        if (m != null) return m.key;
+        // Downloaded skins are DynamicTextures that keep their pixels on the CPU.
+        if (abs instanceof net.minecraft.client.renderer.texture.DynamicTexture dyn && dyn.getPixels() != null) {
+            m = mirrorImage(t, dyn.getPixels());
+            LOG.info("[UltraCraft] gui: mirrored '{}' ({}x{}) from its pixels", id, m.w, m.h);
+            return m.key;
+        }
+        int k = key(mc, abs.getTextureView());
+        if (k >= 0) return k;
+        Mirror loaded = loadFromResources(mc, t, id.toString());
+        return loaded != null ? loaded.key : -1;
+    }
+
+    /**
      * Standalone GUI textures (the inventory and container backgrounds, menu backgrounds, title
      * logos) are plain PNGs, not atlas sprites. Their GPU texture's label is the resource path, so
      * the same PNG is read from Minecraft's resource manager (the player's own install and resource
      * packs) once, mirrored whole and streamed like a font sheet. Textures that are not resources
      * (skins, maps) stay unmirrored.
      */
-    private static Mirror loadFromResources(Minecraft mc, GpuTexture t) {
-        String label = t.getLabel();
+    private static Mirror loadFromResources(Minecraft mc, GpuTexture t, String label) {
         if (label == null || !label.endsWith(".png") || UNKNOWN_LOGGED.contains(label)) return null;
         var id = net.minecraft.resources.Identifier.tryParse(label);
         if (id == null) return null;
         var res = mc.getResourceManager().getResource(id);
-        if (res.isEmpty()) return null;
+        if (res.isEmpty()) {
+            if (UNKNOWN_LOGGED.add(label)) LOG.info("[UltraCraft] gui: texture '{}' is not a resource; its quads are skipped", label);
+            return null;
+        }
         try (var in = res.get().open(); NativeImage img = NativeImage.read(in)) {
-            Mirror m = new Mirror(nextKey++, img.getWidth(), img.getHeight());
-            for (int y = 0; y < m.h; y++) {
-                for (int x = 0; x < m.w; x++) {
-                    int argb = img.getPixel(x, y), o = (y * m.w + x) * 4;
-                    m.rgba[o] = (byte) (argb >> 16);
-                    m.rgba[o + 1] = (byte) (argb >> 8);
-                    m.rgba[o + 2] = (byte) argb;
-                    m.rgba[o + 3] = (byte) (argb >>> 24);
-                }
-            }
-            MIRRORS.put(t, m);
+            Mirror m = mirrorImage(t, img);
             LOG.info("[UltraCraft] gui: mirrored '{}' ({}x{}) from resources", label, m.w, m.h);
             return m;
         } catch (java.io.IOException | RuntimeException e) {
@@ -119,6 +138,22 @@ public final class GuiTextures {
             LOG.warn("[UltraCraft] gui: could not load '{}' from resources: {}", label, e.toString());
             return null;
         }
+    }
+
+    /** A whole image as a new mirror of {@code t}, sent by the next flush. */
+    private static Mirror mirrorImage(GpuTexture t, NativeImage img) {
+        Mirror m = new Mirror(nextKey++, img.getWidth(), img.getHeight());
+        for (int y = 0; y < m.h; y++) {
+            for (int x = 0; x < m.w; x++) {
+                int argb = img.getPixel(x, y), o = (y * m.w + x) * 4;
+                m.rgba[o] = (byte) (argb >> 16);
+                m.rgba[o + 1] = (byte) (argb >> 8);
+                m.rgba[o + 2] = (byte) argb;
+                m.rgba[o + 3] = (byte) (argb >>> 24);
+            }
+        }
+        MIRRORS.put(t, m);
+        return m;
     }
 
     // Reflection into BitmapProvider's private glyph types (package-private record + holder).

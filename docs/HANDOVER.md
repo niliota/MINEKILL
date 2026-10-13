@@ -44,7 +44,7 @@ These came from the user directly. Breaking them wastes the whole effort.
 
 ## 3. Where things are
 
-Working directory: `/home/ash/Documents/AI Merge/UltraCraft`
+Working directory: `<project folder>`
 
 ```
 bridge/protocol/generate.py      SOURCE OF TRUTH for the wire layout. Do not hand-edit
@@ -166,7 +166,7 @@ These are the things that will waste your afternoon if you don't know them.
   `Application.runInBackground` from `BridgeHost.Update` (settles ~frame 120); setting it in
   `Awake`/`Start` does not survive because Unity's Player Settings overwrite it. Without the
   plugin loaded, an unfocused or automated launch looks frozen.
-- **Minecraft instance** is at `UltraCraft/` (canonical); `/home/ash/Games/Minecraft/Instances/UltraCraft`
+- **Minecraft instance** is at `UltraCraft/` (canonical); `~/Games/Minecraft/Instances/UltraCraft`
   is a symlink to it. Launch through PrismLauncher/Freesm.
 - **`Application.isFocused` is unreliable under Wine.** It was true ~32% of the time. Do not
   build logic on it; it is now diagnostics only.

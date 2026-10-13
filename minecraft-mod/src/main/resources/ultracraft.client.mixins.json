@@ -18,7 +18,12 @@
     "ParticleAccessor",
     "SingleQuadParticleAccessor",
     "GuiRendererMixin",
-    "FontTextureMixin"
+    "FontTextureMixin",
+    "RenderTypeAccessor",
+    "RenderSetupAccessor",
+    "GameRendererMixin",
+    "HandRendererMixin",
+    "PictureInPictureRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1

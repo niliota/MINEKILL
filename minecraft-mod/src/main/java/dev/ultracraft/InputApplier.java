@@ -73,12 +73,10 @@ final class InputApplier {
 
         long now = System.currentTimeMillis();
 
-        // While H-locked (PlayerSafety) movement keys are dropped, so the player stays put
-        // instead of stepping a tick's worth and being snapped back.
         // While a Minecraft screen is open (inventory, chat, pause) keys go to the screen as
         // events (applyEvents), and held movement keys are released, as in vanilla.
         boolean screenOpen = mc.gui.screen() != null;
-        int keys = PlayerSafety.locked() || screenOpen ? 0 : in.keys;
+        int keys = screenOpen ? 0 : in.keys;
         set(mc.options.keyUp,    (keys & Protocol.KEY_FORWARD) != 0);
         set(mc.options.keyDown,  (keys & Protocol.KEY_BACK) != 0);
         set(mc.options.keyLeft,  (keys & Protocol.KEY_LEFT) != 0);

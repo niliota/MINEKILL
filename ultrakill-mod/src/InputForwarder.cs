@@ -198,8 +198,6 @@ namespace UltraCraft
             if (Held(KeyCode.LeftShift)) keys |= Protocol.KEY_SNEAK;
             // Minecraft sprints on Left Control by default.
             if (Held(KeyCode.LeftControl)) keys |= Protocol.KEY_SPRINT;
-            // H is unbound in ULTRAKILL by default: lock/unlock the Minecraft player.
-            if (Held(KeyCode.H)) keys |= Protocol.KEY_HOLD_TOGGLE;
 
             // Mouse movement as a raw per-frame delta.
             //
