@@ -2028,3 +2028,13 @@ player re-acquire, so each level samples its own; (3) ApplyRotations warnings ra
 (1 per 600) and report which reference is null and whether NewMovement.Instance is our player.
 
 User confirmed: world upright again, particles and clicks work.
+
+---
+
+## 2026-10-13 — Particle shading (awaiting playtest)
+
+Particles were drawn with the blocks' cutout material, the user's choice `Unlit/Texture`: no
+vertex colour, no scene light. Blocks look shaded because Minecraft bakes face shade + AO + tint
+into vertex colour and the solid material (Master clone, VERTEX_LIGHTING, fog) lights it. Particles
+now always use the vertex-lit cutout material (F10 [4]: the solid layer's Master clone + alpha test),
+independent of the blocks' cutout choice; billboard normals face the camera for the vertex lighting.
