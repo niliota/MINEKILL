@@ -32,7 +32,8 @@
     "AbstractArrowMixin",
     "ProjectileUtilMixin",
     "ItemMixin",
-    "FlowingFluidMixin"
+    "FlowingFluidMixin",
+    "ProjectileMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -155,11 +155,10 @@ public final class WorldModels {
             if (key < 0) return;
             var pos = s.blockPos();
             if (s.blockState().getRenderShape() != RenderShape.MODEL) {
-                // Block entities (chests, signs, banners, ...) have no block model to crack; their
-                // renderer would draw the crumbling overlay. Crack their outline shape instead.
-                for (var box : s.blockState().getShape(mc.level, pos).toAabbs()) crackBox(box.move(pos), key);
+                crackShape(mc, s, key);
                 return;
             }
+            int before = n;
             var offset = s.blockState().getOffset(pos);
             var model = mc.getModelManager().getBlockStateModelSet().get(s.blockState());
             RandomSource random = RandomSource.create(s.blockState().getSeed(pos));
@@ -192,12 +191,20 @@ public final class WorldModels {
                     }
                 }
             }
+            // Chests, banners, signs, ... count as MODEL blocks in 26.3 but their block model is
+            // empty (a particle texture only); what you see is their block entity renderer.
+            if (n == before) crackShape(mc, s, key);
         } catch (RuntimeException e) {
             if (!crackFailureLogged) {
                 crackFailureLogged = true;
                 LoggerFactory.getLogger("ultracraft").warn("[UltraCraft] world models: crack capture failed: {}", e.toString());
             }
         }
+    }
+
+    /** Block entities: their renderer would crack the model; crack the outline shape instead. */
+    private void crackShape(Minecraft mc, BlockBreakingRenderState s, int key) {
+        for (var box : s.blockState().getShape(mc.level, s.blockPos()).toAabbs()) crackBox(box.move(s.blockPos()), key);
     }
 
     /** Six crack faces over a box (world coords), lifted a hair, UVs laid over each face. */
