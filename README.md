@@ -214,6 +214,7 @@ docs/
   SETUP.md         the development machine
   LEGAL.md         what this project does and does not contain, and why
   MODLOG.md        the development log, round by round
+  INIT_PROMPT.md   the original brief the project was started from
 ```
 
 ## Credits
