@@ -1700,3 +1700,122 @@ smooth, which is exactly the report.
 Kinematic bodies are not pushed by colliders anyway (collision is Minecraft's job now), so
 nothing is lost. The old comment claiming "kinematic movement still resolves against
 colliders" was wrong and is gone.
+
+---
+
+## 2026-10-13 — Decisions and research: no ULTRAKILL movement; how SkyCraft renders
+
+**User decision:** no ULTRAKILL movement at all, not even dash/slide. Pure Minecraft movement.
+Supersedes the brief's "keep sliding and dashing" and HANDOVER constraint 3. (`NoOpUpdate`
+still does not actually stop `NewMovement` — fixing that is now simply "finish disabling it".)
+
+**SkyCraft rendering, from its SOURCE (MIT, github.com/chasmlol/SkyCraft, pushed 2026-10-01).**
+Its DESIGN.md describes compositing three Minecraft-rendered layers with GPU interop; the shipped
+code differs and is a hybrid:
+
+- **World: native.** `WorldExporter` re-meshes dirty 16^3 sections (12/frame, placed/broken
+  first) with Minecraft's own `ModelBlockRenderer`/`FluidRenderer` into triangles
+  (section-relative position, atlas UV, RGBA tint+shading, block/sky light) and ships them.
+  `SkyAtlas` builds one RGBA image on the CPU from Minecraft's LOADED block + item atlases
+  (so the player's own install / resource packs; nothing shipped), plus crack stages and arrow
+  textures; animated sprites are streamed per tick. Dropped items, arrows, cracks and the
+  selection outline go as light "world entities". `AvatarExporter` implements
+  `SubmitNodeCollector` to capture Minecraft's posed entity / block-entity / particle geometry
+  as triangles. Skyrim draws all of it in its own frame (`WorldRender.cpp`, ~3,400 lines of
+  D3D11: depth with the world, Skyrim's sun shadow maps, ambient, contact shadows).
+- **Hand + HUD + screens: an image.** `LevelRendererMixin` cancels `LevelRenderer.render` while
+  linked, so Minecraft's main render target holds only hand + HUD on transparent background;
+  `FrameExporter` reads it back asynchronously (staging buffers) into a triple-buffered
+  overlay that Skyrim draws on top (`Overlay.cpp`; crosshair with Minecraft's invert blend).
+- Placement on host geometry: `SkyClip.SkyrimHitResult`, a synthetic block hit on Skyrim
+  ground; the outline shows where a held block would go. Relevant to Milestone E.
+- Same Minecraft 26.x APIs as ours (`QuadInstance`, `BlockQuadOutput`, `SubmitNodeCollector`).
+
+Implication: our stage names (GUI layer, world layer (depth), hand layer) came from SkyCraft's
+design doc, which assumed image compositing; our contract forbids images. Decision pending.
+
+**User decision: fully native rendering, no images.** World, hand/held item, HUD and every
+Minecraft menu are redrawn in Unity from Minecraft data and textures read from the player's own
+install at runtime. The contract's "no images cross the bridge" rule stands as written.
+
+---
+
+## 2026-10-13 — ULTRAKILL movement fully off; world layer W1 (awaiting playtest)
+
+**Movement cleanup.** The void `NoOpUpdate` Harmony prefixes are gone (they never skipped
+anything). `NewMovement.Update` turned out to carry far more than movement (hard-damage
+recovery, hurt flash, death check, dash stamina, fists, camera height/shake, footsteps,
+landing), so skipping it would have broken ULTRAKILL systems. Instead the puppet calls
+ULTRAKILL's own `NewMovement.DeactivateMovement()` (what its cutscenes use) every frame it
+finds `activated` true: that flag gates exactly move/jump/slide/dash input in Update and
+FixedUpdate. Only other readers: `CameraController.LateUpdate` (skips walking head-bob) and
+`PlayerActivator.Activate` (level start turns it back on — hence every frame). Shutdown calls
+`ReactivateMovement()`. Explains the varying feet offset: Ctrl (MC sprint) also started
+ULTRAKILL's slide.
+
+**Shaders (measurement pending).** ULTRAKILL ships its shaders in a 400 MB LZ4 Addressables
+bundle (`StreamingAssets/aa/.../shaders.bundle`); names are not readable offline without new
+tooling. The plugin logs every loaded shader, availability of the candidates, and the shader /
+keywords / properties of ULTRAKILL's own level materials near the player, then picks the first
+available of: Unlit/Transparent Cutout, Legacy Cutout VertexLit, Legacy Cutout Diffuse,
+Unlit/Texture, Standard, Sprites/Default. None of those is known to multiply vertex colour, so
+grass/leaf tint and face shading may be missing until a better shader is chosen from the log.
+
+**STREAM file** (`/var/tmp/ultracraft.stream`, 64 MB ring + 64-byte header; constants in
+generate.py, covered by check-layout.sh). SPSC: Minecraft owns HEAD and ring, ULTRAKILL owns
+TAIL; 8-aligned records `u32 type, u32 len, payload`; PAD record instead of wrapping; writes
+never block (returns false, caller retries). Resync: ULTRAKILL sets TAIL=HEAD and bumps
+UK_RESYNC_REQUEST on open; Minecraft answers CLEAR_ALL + atlas + all sections.
+
+**Minecraft (`render/WorldMesher`, `render/AtlasExport`, after SkyCraft's WorldExporter /
+SkyAtlas, MIT).** `LevelExtractorMixin` on private `setSectionDirty(IIIZ)` (verified: the
+public overload and setBlockDirty funnel into it). Dirty sections meshed with Minecraft's own
+`ModelBlockRenderer.tesselateBlock` / `FluidRenderer.tesselate` (fluid vertices verified
+section-relative in bytecode: `getX() & 15`), 12 sections / 3 ms per frame, player changes
+first. Vertex: pos f32x3, UV f32x2 (block-atlas UVs unchanged), RGBA8 (Minecraft tint x face
+shade x AO), flags (block/sky light, translucent). Block atlas built on the CPU from each
+sprite's `originalImage` (accessors for TextureAtlas.width/height/sprites and
+SpriteContents.originalImage), padded like Minecraft.
+
+**ULTRAKILL (`StreamReader`, `McWorldView`).** 4 ms/frame poll. Atlas -> RGBA32 Texture2D,
+point filtered, no flip needed (row 0 = v 0 on both sides). Each section -> a Mesh +
+GameObject on layer 8 (Environment, rendered by the main camera; no colliders) at its MC block
+origin, under one root whose TRS is `PuppetController.GetMcWorldTransform` (the MC->UK map;
+scale.x negative = the measured X mirror, which Unity draws with flipped winding).
+
+**Offline checks:** root TRS vs `UkToMc`, 5000 random points: worst error 2e-13 blocks.
+Stream, real Java writer vs real C# reader: 400 records / 551 MB (~8.6 wraps through PAD) all
+intact and in order; with the reader started late the writer hit ring-full 491 times and
+waited, and the reader's open dropped the backlog by design (resync). Layout check passes.
+
+---
+
+## 2026-10-13 — Playtest: world layer works; sneak freeze and grass colours (awaiting playtest)
+
+User: blocks visible, correctly placed, solid. Two issues: sneaking halts all movement on
+ULTRAKILL floors (fine on Minecraft blocks); "complex" blocks like grass render grey with wrong
+side textures.
+
+**Shader measurement (from the W1 log):** 76 shaders loaded; none of the generic cutout
+candidates exist; W1 drew with `Unlit/Texture`, which ignores vertex colour — hence grey grass
+(Minecraft's biome tint lives in vertex colour) and broken sides (the side is dirt plus a
+tinted, alpha-cut overlay quad; without colour or cutout the overlay is an opaque grey slab).
+ULTRAKILL's level geometry uses `ULTRAKILL/Master` with keywords incl. `_VERTEXCOLORS_ON`,
+`VERTEX_LIGHTING`, `_FOG_ON`; properties incl. `_BlendMode`, `_SrcBlend/_DstBlend`, `_ZWrite`,
+`_CullMode`, `_SurfaceType` (meanings not recoverable offline: ULTRAKILL's C# never sets them).
+Also present: psx/unlit/alphatest/nocull, psx/vertexlit/*, ProBuilder/Standard Vertex Color.
+
+**Fix:** quads carry their Minecraft section layer (flag bit 16 translucent, 17 cutout);
+sections get three submeshes. Preferred material per layer = a clone of one of the current
+level's own Master materials of matching blend style (by render queue / blend factors), with
+level effects' keywords off, `_VERTEXCOLORS_ON`, white `_Color`, the atlas; generic shaders
+follow as candidates. Every distinct Master variant in the level is logged, and **F9 / F10 /
+F11 cycle the solid / cutout / translucent material live**. Meshes now get face normals
+(Master lights by normal).
+
+**Sneak freeze — cause (bytecode):** `maybeBackOffFromEdge` and `isAboveGround` both use
+`Player.canFallAtLeast`, whose only test is `level.noCollision(this, box)` — block collision,
+not the movement path EntityCollisionMixin patches, so ULTRAKILL floors were invisible to it and
+every direction looked like a drop. **Fix:** `PlayerEdgeMixin` redirects that call:
+no collision only if ULTRAKILL boxes are clear too. Sneaking should now stop at ULTRAKILL ledges
+like at block edges. (SkyCraft instead disables the edge stop entirely.)

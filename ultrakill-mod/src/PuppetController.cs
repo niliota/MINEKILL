@@ -84,8 +84,7 @@ namespace UltraCraft
         private NewMovement _movement;
         private CameraController _camera;
         private Rigidbody _rb;
-        private HarmonyLib.Harmony _harmony;
-        private readonly System.Collections.Generic.List<System.Reflection.MethodInfo> _patched = new();
+        private int _movementReenabled;
 
         private float _scale = 1f;
 
@@ -284,40 +283,40 @@ namespace UltraCraft
         }
 
         /// <summary>
-        /// Stop ULTRAKILL moving the player itself. Its Update also applies gravity,
-        /// dash, slide and jump, all of which would fight the puppet every frame.
+        /// Switch ULTRAKILL's own movement off, with ULTRAKILL's own switch.
+        ///
+        /// The user wants pure Minecraft movement: no ULTRAKILL walking, jumping, sliding or
+        /// dashing at all. `NewMovement.DeactivateMovement()` is what ULTRAKILL's cutscenes
+        /// use; it clears `activated`, which gates exactly the movement input in Update and
+        /// FixedUpdate (move, jump, slide, dash) and nothing else. Health, hurt effects, style
+        /// and camera shake keep running, so ULTRAKILL's other systems are untouched.
+        ///
+        /// ULTRAKILL turns movement back on by itself (the level-start PlayerActivator,
+        /// Respawn), so this is re-asserted every frame from <see cref="Tick"/>.
+        ///
+        /// History: this used to be two Harmony prefixes on Update/FixedUpdate whose comment
+        /// said they replaced the body. They returned void, and a void Harmony prefix never
+        /// skips the original, so ULTRAKILL's movement ran the whole time: Ctrl (forwarded as
+        /// Minecraft sprint) also started ULTRAKILL's slide, shrinking the capsule and dropping
+        /// the camera, which showed up as the feet offset varying between anchors.
         /// </summary>
         private void DisableNativeMovement()
         {
             try
             {
-                _harmony = new HarmonyLib.Harmony("dev.ultracraft.puppet");
-                foreach (var name in new[] { "Update", "FixedUpdate" })
+                if (_movement != null && _movement.activated)
                 {
-                    var mi = typeof(NewMovement).GetMethod(name,
-                        System.Reflection.BindingFlags.Instance |
-                        System.Reflection.BindingFlags.Public |
-                        System.Reflection.BindingFlags.NonPublic);
-                    if (mi == null) continue;
-                    var prefix = new HarmonyLib.HarmonyMethod(
-                        typeof(PuppetController).GetMethod(
-                            nameof(NoOpUpdate),
-                            System.Reflection.BindingFlags.Static |
-                            System.Reflection.BindingFlags.NonPublic));
-                    _harmony.Patch(mi, prefix: prefix);
-                    _patched.Add(mi);
-                    _log.LogInfo($"puppet: neutralised NewMovement.{name}");
+                    _movement.DeactivateMovement();
+                    if (_movement.sliding) _movement.StopSlide();
+                    _movementReenabled++;
+                    if (_movementReenabled <= 3 || _movementReenabled % 50 == 0)
+                        _log.LogInfo($"puppet: ULTRAKILL movement switched off (time {_movementReenabled})");
                 }
             }
             catch (Exception e)
             {
-                _log.LogError($"puppet: could not patch NewMovement: {e.GetType().Name}: {e.Message}");
+                _log.LogWarning($"puppet: could not switch ULTRAKILL movement off: {e.Message}");
             }
-        }
-
-        private static void NoOpUpdate(ref bool __state)
-        {
-            // Replaces the original body. The player is driven from Minecraft instead.
         }
 
         private void MakeKinematic()
@@ -368,6 +367,9 @@ namespace UltraCraft
                 _searches = 0;
                 return;
             }
+
+            // Every frame: ULTRAKILL re-enables its own movement on level start and respawn.
+            DisableNativeMovement();
 
             Protocol.SlotPlayer p;
             if (!_bridge.TryReadSlot(Protocol.OFFSET_PLAYER, Protocol.SLOTPLAYER_SIZE, out p)) return;
@@ -644,6 +646,32 @@ namespace UltraCraft
             halfExtents = new Vector3(h.x * _scale * lenX, h.y * _scale, h.z * _scale * lenZ);
             // Local +Z along Minecraft +Z's image; local +X is then +-Minecraft +X's image.
             rotation = Quaternion.LookRotation(new Vector3(b, 0f, d), Vector3.up);
+        }
+
+        /// <summary>
+        /// The Minecraft-to-ULTRAKILL map (feet to feet, same cached bases as
+        /// <see cref="UkToMc"/>) as one Unity transform, so Minecraft-space content can be
+        /// parented under an object with this pose and drawn in place. The map sends MC +X to
+        /// (a,0,c)*scale, +Y to up*scale, +Z to (b,0,d)*scale. Rotation points local +Z along
+        /// MC +Z's image; local +X is then +-MC +X's image, and the sign goes into scale.x. A
+        /// negative scale is the X mirror (measured A = diag(-1, 1)); Unity draws mirrored
+        /// transforms correctly by flipping the triangle winding itself.
+        /// </summary>
+        public void GetMcWorldTransform(out Vector3 position, out Quaternion rotation, out Vector3 scale)
+        {
+            Vector3 uF = _cachedUkForward, uR = _cachedUkRight;
+            Vector3 mF = _cachedMcForward, mR = _cachedMcRight;
+            float a = uF.x * mF.x + uR.x * mR.x, b = uF.x * mF.z + uR.x * mR.z;
+            float c = uF.z * mF.x + uR.z * mR.x, d = uF.z * mF.z + uR.z * mR.z;
+
+            Vector3 imgX = new Vector3(a, 0f, c), imgZ = new Vector3(b, 0f, d);
+            rotation = Quaternion.LookRotation(imgZ, Vector3.up);
+            float sx = Vector3.Dot(rotation * Vector3.right, imgX) >= 0f ? 1f : -1f;
+            scale = new Vector3(sx * imgX.magnitude * _scale, _scale, imgZ.magnitude * _scale);
+
+            Vector3 o = _mcOrigin;
+            position = _ukAnchor + _ukFeetOffset
+                     - new Vector3((a * o.x + b * o.z) * _scale, o.y * _scale, (c * o.x + d * o.z) * _scale);
         }
 
         private void Anchor(Protocol.SlotPlayer p)
@@ -1154,22 +1182,14 @@ namespace UltraCraft
             return new Vector3(-Mathf.Cos(y), 0f, -Mathf.Sin(y));
         }
 
-        /// <summary>Undo the patches and hand the player back to ULTRAKILL.</summary>
+        /// <summary>Hand the player back to ULTRAKILL: movement on, physics on.</summary>
         public void Shutdown()
         {
             try
             {
-                if (_harmony != null)
-                {
-                    // Unpatch by our own id, so only OUR patches are removed and any
-                    // other mod's patches on the same methods survive.
-                    // UnpatchSelf() removes only this Harmony instance's patches, so any
-                    // other mod's patches on the same methods survive.
-                    _harmony.UnpatchSelf();
-                }
+                if (_movement != null) _movement.ReactivateMovement();
             }
             catch { }
-            _patched.Clear();
 
             try
             {

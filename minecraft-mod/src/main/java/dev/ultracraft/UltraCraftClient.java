@@ -30,6 +30,8 @@ public class UltraCraftClient implements ClientModInitializer {
     private InputApplier input;
     private final UkCollision collision = new UkCollision();
     private final PlayerSafety safety = new PlayerSafety();
+    private dev.ultracraft.bridge.Stream stream;
+    private dev.ultracraft.render.WorldMesher mesher;
 
     /**
      * Whether Minecraft should behave as if its window were focused.
@@ -84,6 +86,16 @@ public class UltraCraftClient implements ClientModInitializer {
 
         LOG.info("[UltraCraft] bridge open at {} (pid {}, {} bytes, awaiting ULTRAKILL pid {})",
                 bridge.path(), selfPid(), Protocol.TOTAL_SIZE, bridge.ukPid());
+
+        stream = dev.ultracraft.bridge.Stream.openNextTo(bridge.path());
+        if (stream.ok()) {
+            mesher = new dev.ultracraft.render.WorldMesher(stream);
+            LOG.info("[UltraCraft] stream open at {} ({} MB ring)", stream.path(),
+                    Protocol.STREAM_RING_SIZE / (1024 * 1024));
+        } else {
+            LOG.error("[UltraCraft] stream failed to open ({}); blocks will not appear in ULTRAKILL",
+                    stream.lastError());
+        }
 
         publisher = new PlayerPublisher();
         publisher.attach(bridge);
@@ -161,12 +173,14 @@ public class UltraCraftClient implements ClientModInitializer {
 
         // ULTRAKILL has OS focus, so apply its keyboard and mouse to Minecraft.
         if (input != null && bridge.connected()) input.apply(mc);
+        if (mesher != null && ukAlive) mesher.frame(mc);
 
         if (++ticks % 200 == 0) {
             LOG.info("[UltraCraft] tick {}: uk pid {} hb {} flags {} dropped {} | {}",
                     ticks, bridge.ukPid(), bridge.ukHeartbeat(), bridge.ukFlags(),
                     bridge.ukDroppedEvents(),
-                    safety.describe() + " | " + UkCollision.describe(mc.player != null ? mc.player.getBoundingBox() : null));
+                    safety.describe() + " | " + (mesher != null ? mesher.describe() : "world off") + " | "
+                            + UkCollision.describe(mc.player != null ? mc.player.getBoundingBox() : null));
         }
     }
 

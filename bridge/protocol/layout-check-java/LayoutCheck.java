@@ -14,7 +14,7 @@ public class LayoutCheck
             String n = f.getName();
             if (f.getType() != int.class) continue;
             if (!java.lang.reflect.Modifier.isStatic(f.getModifiers())) continue;
-            if (!(n.startsWith("OFFSET_") || n.startsWith("TBL_"))) continue;
+            if (!(n.startsWith("OFFSET_") || n.startsWith("TBL_") || n.startsWith("STREAM_"))) continue;
             try { System.out.println("CONST:" + n + ":" + f.getInt(null)); }
             catch (IllegalAccessException e) { System.out.println("CONST:" + n + ":UNREADABLE"); }
         }

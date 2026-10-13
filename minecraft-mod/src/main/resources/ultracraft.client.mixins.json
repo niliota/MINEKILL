@@ -7,7 +7,11 @@
     "MinecraftMixin",
     "WindowMixin",
     "MouseHandlerMixin",
-    "EntityCollisionMixin"
+    "EntityCollisionMixin",
+    "LevelExtractorMixin",
+    "TextureAtlasAccessor",
+    "SpriteContentsAccessor",
+    "PlayerEdgeMixin"
   ],
   "injectors": {
     "defaultRequire": 1
