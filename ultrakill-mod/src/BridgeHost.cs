@@ -221,6 +221,7 @@ namespace UltraCraft
             if (_puppet != null) _puppet.TickCamera();
             // After the camera is placed, so particles face where the camera actually looks.
             if (_world != null) _world.LateTick();
+            if (_hud != null) _hud.LateTick();
 
             // ULTRAKILL holds OS focus, so Minecraft never sees the keyboard. Sampled
             // here so the final mouse position of the frame is used.

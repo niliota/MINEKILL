@@ -311,6 +311,9 @@ public final class Bridge implements AutoCloseable {
         public float scrollTotal;
         /** ULTRAKILL's screen size in pixels (0 from an older build). */
         public int screenWidth, screenHeight;
+        /** ULTRAKILL's cursor in Minecraft GUI pixels, valid while cursorActive (a screen is open). */
+        public float cursorX, cursorY;
+        public boolean cursorActive;
         public long tickTimestamp;
     }
 
@@ -357,6 +360,9 @@ public final class Bridge implements AutoCloseable {
         out.scrollTotal = f(Protocol.SlotInput.OFF_SCROLLTOTAL);
         out.screenWidth = ByteBuffer.wrap(lastRead).order(ByteOrder.LITTLE_ENDIAN).getShort(Protocol.SlotInput.OFF_SCREENWIDTH) & 0xFFFF;
         out.screenHeight = ByteBuffer.wrap(lastRead).order(ByteOrder.LITTLE_ENDIAN).getShort(Protocol.SlotInput.OFF_SCREENHEIGHT) & 0xFFFF;
+        out.cursorX = f(Protocol.SlotInput.OFF_CURSORX);
+        out.cursorY = f(Protocol.SlotInput.OFF_CURSORY);
+        out.cursorActive = bit(Protocol.SlotInput.OFF_CURSORACTIVE);
         return endRead(at, seq);
     }
 
@@ -487,7 +493,8 @@ public final class Bridge implements AutoCloseable {
      * Write the GUI table under its seqlock: xyuv (4 floats per vertex), rgba and texture key per
      * vertex, plus Minecraft's GUI scale and size for ULTRAKILL's screen.
      */
-    public void writeGuiTable(long ts, int count, int scale, int width, int height, float[] xyuv, int[] rgba, int[] tex) {
+    public void writeGuiTable(long ts, int count, int scale, int width, int height, boolean screenOpen, boolean pauseScreen,
+                              float[] xyuv, int[] rgba, int[] tex) {
         if (!connected) return;
         if (count > Protocol.TBL_GUI_CAPACITY) count = Protocol.TBL_GUI_CAPACITY;
         int b = Protocol.TBL_GUI_OFFSET;
@@ -497,6 +504,8 @@ public final class Bridge implements AutoCloseable {
         buf.putInt(b + Protocol.TBL_GUI_OFF_GUISCALE, scale);
         buf.putInt(b + Protocol.TBL_GUI_OFF_GUIWIDTH, width);
         buf.putInt(b + Protocol.TBL_GUI_OFF_GUIHEIGHT, height);
+        buf.putInt(b + Protocol.TBL_GUI_OFF_SCREENOPEN, screenOpen ? 1 : 0);
+        buf.putInt(b + Protocol.TBL_GUI_OFF_PAUSESCREEN, pauseScreen ? 1 : 0);
         int r0 = b + Protocol.TBL_GUI_OFF_RECORDS;
         for (int i = 0; i < count; i++) {
             int at = r0 + i * Protocol.TBL_GUI_RECORD_SIZE, o = i * 4;
@@ -634,8 +643,10 @@ public final class Bridge implements AutoCloseable {
         int head = buf.getInt(ring + Protocol.RINGUKEVENTS_OFF_HEAD);
         int tail = buf.getInt(ring + Protocol.RINGUKEVENTS_OFF_TAIL);
         if (head == tail) return null;
+        // The record was written before head was published; read it only after reading head.
+        java.lang.invoke.VarHandle.acquireFence();
         int at = ring + Protocol.RINGUKEVENTS_OFF_RECORDS
-                + (tail % cap) * Protocol.RINGUKEVENTS_RECORD_SIZE;
+                + Integer.remainderUnsigned(tail, cap) * Protocol.RINGUKEVENTS_RECORD_SIZE;
         Event e = new Event(
                 buf.getInt(at + Protocol.RingUkEvents.Rec.OFF_KIND),
                 buf.getInt(at + Protocol.RingUkEvents.Rec.OFF_A),

@@ -70,8 +70,9 @@ public final class GuiCapture implements VertexConsumer {
     public void end(Bridge bridge) {
         capturing = false;
         if (bridge == null || !bridge.connected() || !GuiLayout.active()) return;
+        var screen = Minecraft.getInstance().gui.screen();
         bridge.writeGuiTable(System.currentTimeMillis(), n, GuiLayout.scale(), GuiLayout.scaledWidth(),
-                GuiLayout.scaledHeight(), xyuv, rgba, tex);
+                GuiLayout.scaledHeight(), screen != null, screen != null && screen.isPauseScreen(), xyuv, rgba, tex);
     }
 
     private static long key(int x, int y, Matrix3x2fc pose) {

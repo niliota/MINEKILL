@@ -101,6 +101,9 @@ SLOTS = [
         ("scrollTotal","f32", "running sum of mouse-wheel steps; Minecraft applies the difference"),
         ("screenWidth","u16", "ULTRAKILL's screen in pixels: Minecraft lays its GUI out for this size"),
         ("screenHeight","u16", ""),
+        ("cursorX","f32", "ULTRAKILL's cursor in Minecraft GUI pixels, while a Minecraft screen is open"),
+        ("cursorY","f32", ""),
+        ("cursorActive","u8", "1 while cursorX/Y drive Minecraft's cursor"),
     ]),
     ("SlotCorrection", "CORRECTION", "ULTRAKILL -> Minecraft",
      "ULTRAKILL's collision pushed the player; Minecraft must accept it", [
@@ -186,6 +189,8 @@ TABLES = [
         ("guiScale","u32", "Minecraft's GUI scale for ULTRAKILL's screen"),
         ("guiWidth","u32", "screen size in GUI pixels"),
         ("guiHeight","u32", ""),
+        ("screenOpen","u32", "1 while a Minecraft screen is open (inventory, chat, pause): mouse and keys go to it"),
+        ("pauseScreen","u32", "1 while that screen pauses Minecraft's game (ULTRAKILL freezes too)"),
      ], [
         ("x","f32", "GUI pixels, origin top-left"),
         ("y","f32", ""),
@@ -420,8 +425,7 @@ def emit_csharp(header_size, slots, rings, tables, total_size, path):
     w("        // Event kinds, shared with the Java side.")
     w("        public enum EventKind : uint")
     w("        {")
-    for kind in ["BLOCK_PLACED", "BLOCK_BROKEN", "ENTITY_ATTACKED",
-                 "PLAYER_HURT", "LEVEL_LOADED", "PLAYER_RESPAWN"]:
+    for kind in EVENT_KINDS:
         w(f"            {kind} = {EVENT_KINDS[kind]},")
     w("        }")
     w("    }")
@@ -448,6 +452,13 @@ EVENT_KINDS = {
     "PLAYER_HURT": 4,
     "LEVEL_LOADED": 5,
     "PLAYER_RESPAWN": 6,
+    # Keyboard passthrough (UK_EVENTS ring): a = SDL3 scancode (Minecraft 26.x input is SDL3:
+    # InputConstants.KEY_ESCAPE = 41, KEY_E = 8, ...; NOT GLFW codes), b = action (0 release,
+    # 1 press, 2 repeat) | SDL modifier bits << 8 (lshift 0x1, rshift 0x2, lctrl 0x40, rctrl 0x80,
+    # lalt 0x100, ralt 0x200; InputConstants.MOD_*).
+    "KEY": 7,
+    # Typed character (UK_EVENTS ring): a = Unicode code point.
+    "CHAR": 8,
 }
 
 
@@ -534,12 +545,8 @@ def emit_java(header_size, slots, rings, tables, total_size, path):
         w(f"    public static final int {k} = {v};")
     w("")
     w("    // Event kinds, shared with the C# side.")
-    w("    public static final int EV_BLOCK_PLACED = 1;")
-    w("    public static final int EV_BLOCK_BROKEN = 2;")
-    w("    public static final int EV_ENTITY_ATTACKED = 3;")
-    w("    public static final int EV_PLAYER_HURT = 4;")
-    w("    public static final int EV_LEVEL_LOADED = 5;")
-    w("    public static final int EV_PLAYER_RESPAWN = 6;")
+    for kind, value in EVENT_KINDS.items():
+        w(f"    public static final int EV_{kind} = {value};")
     w("}")
     open(path, "w").write("\n".join(L) + "\n")
 

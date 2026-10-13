@@ -54,6 +54,100 @@ namespace UltraCraft
             }
         }
 
+        // ---- keyboard passthrough ------------------------------------------------------
+
+        /// <summary>
+        /// Unity key -> SDL3 scancode, which is what Minecraft 26.x's KeyboardHandler expects: its
+        /// input moved from GLFW to SDL3 (InputConstants.KEY_ESCAPE = 41, KEY_E = 8, KEY_T = 23,
+        /// KEY_SLASH = 56, verified with javap; KeyEvent.isEscape() is input() == 41). The first
+        /// version sent GLFW codes, so E arrived as F12, Q as the Down arrow and Esc as nothing.
+        /// </summary>
+        private static readonly System.Collections.Generic.Dictionary<KeyCode, int> SdlKeys = BuildSdlKeys();
+        private const int SdlEscape = 41;
+
+        private static System.Collections.Generic.Dictionary<KeyCode, int> BuildSdlKeys()
+        {
+            var m = new System.Collections.Generic.Dictionary<KeyCode, int>();
+            for (int i = 0; i < 26; i++) m[KeyCode.A + i] = 4 + i;          // A=4 .. Z=29
+            for (int i = 1; i <= 9; i++) m[KeyCode.Alpha0 + i] = 29 + i;    // 1=30 .. 9=38
+            m[KeyCode.Alpha0] = 39;
+            for (int i = 0; i < 12; i++) m[KeyCode.F1 + i] = 58 + i;        // F1=58 .. F12=69
+            m[KeyCode.Return] = 40; m[KeyCode.Escape] = SdlEscape; m[KeyCode.Backspace] = 42; m[KeyCode.Tab] = 43;
+            m[KeyCode.Space] = 44; m[KeyCode.Minus] = 45; m[KeyCode.Equals] = 46; m[KeyCode.LeftBracket] = 47;
+            m[KeyCode.RightBracket] = 48; m[KeyCode.Backslash] = 49; m[KeyCode.Semicolon] = 51; m[KeyCode.Quote] = 52;
+            m[KeyCode.BackQuote] = 53; m[KeyCode.Comma] = 54; m[KeyCode.Period] = 55; m[KeyCode.Slash] = 56;
+            m[KeyCode.Insert] = 73; m[KeyCode.Home] = 74; m[KeyCode.PageUp] = 75; m[KeyCode.Delete] = 76;
+            m[KeyCode.End] = 77; m[KeyCode.PageDown] = 78; m[KeyCode.RightArrow] = 79; m[KeyCode.LeftArrow] = 80;
+            m[KeyCode.DownArrow] = 81; m[KeyCode.UpArrow] = 82; m[KeyCode.KeypadEnter] = 88;
+            m[KeyCode.LeftControl] = 224; m[KeyCode.LeftShift] = 225; m[KeyCode.LeftAlt] = 226;
+            m[KeyCode.RightControl] = 228; m[KeyCode.RightShift] = 229; m[KeyCode.RightAlt] = 230;
+            return m;
+        }
+
+        /// <summary>Outside Minecraft screens, only these go to Minecraft as key events.</summary>
+        private static readonly KeyCode[] GameplayKeys = { KeyCode.T, KeyCode.Slash, KeyCode.E, KeyCode.Q, KeyCode.BackQuote };
+        /// <summary>Held editing keys repeat inside screens, like typing in Minecraft's own window.</summary>
+        private static readonly KeyCode[] RepeatKeys =
+            { KeyCode.Backspace, KeyCode.Delete, KeyCode.LeftArrow, KeyCode.RightArrow, KeyCode.UpArrow, KeyCode.DownArrow };
+        private KeyCode _repeatKey = KeyCode.None;
+        private float _repeatAt;
+
+        /// <summary>
+        /// Key and character events for Minecraft (UK_EVENTS ring). Outside a Minecraft screen: T
+        /// (chat), / (command line), E (inventory), Q (drop), and ~ which is sent as Esc to open
+        /// Minecraft's pause menu (Esc itself stays ULTRAKILL's). Inside a Minecraft screen: every
+        /// mapped key, held editing keys repeating, typed characters, and Esc goes to Minecraft
+        /// (ULTRAKILL's pause key is held off meanwhile, see HudView.LateTick).
+        /// </summary>
+        private void ForwardKeyEvents(bool screenOpen)
+        {
+            // SDL modifier bits (InputConstants.MOD_SHIFT = 3, MOD_CONTROL = 192, MOD_ALT = 768).
+            int mods = (Held(KeyCode.LeftShift) ? 0x1 : 0) | (Held(KeyCode.RightShift) ? 0x2 : 0)
+                     | (Held(KeyCode.LeftControl) ? 0x40 : 0) | (Held(KeyCode.RightControl) ? 0x80 : 0)
+                     | (Held(KeyCode.LeftAlt) ? 0x100 : 0) | (Held(KeyCode.RightAlt) ? 0x200 : 0);
+            if (screenOpen)
+            {
+                foreach (var kv in SdlKeys)
+                {
+                    int code = kv.Key == KeyCode.BackQuote ? SdlEscape : kv.Value;   // ` closes screens too
+                    if (UnityEngine.Input.GetKeyDown(kv.Key))
+                    {
+                        PushKey(code, 1, mods);
+                        if (System.Array.IndexOf(RepeatKeys, kv.Key) >= 0) { _repeatKey = kv.Key; _repeatAt = Time.unscaledTime + 0.5f; }
+                    }
+                    if (UnityEngine.Input.GetKeyUp(kv.Key))
+                    {
+                        PushKey(code, 0, mods);
+                        if (_repeatKey == kv.Key) _repeatKey = KeyCode.None;
+                    }
+                }
+                if (_repeatKey != KeyCode.None && Held(_repeatKey) && Time.unscaledTime >= _repeatAt)
+                {
+                    PushKey(SdlKeys[_repeatKey], 2, mods);
+                    _repeatAt = Time.unscaledTime + 0.05f;
+                }
+                foreach (char ch in UnityEngine.Input.inputString)
+                    if (ch >= 32 && ch != 127) PushEvent(Protocol.EventKind.CHAR, ch, 0);   // control chars come as keys
+            }
+            else
+            {
+                _repeatKey = KeyCode.None;
+                foreach (KeyCode k in GameplayKeys)
+                {
+                    int code = k == KeyCode.BackQuote ? SdlEscape : SdlKeys[k];
+                    if (UnityEngine.Input.GetKeyDown(k)) PushKey(code, 1, mods);
+                    if (UnityEngine.Input.GetKeyUp(k)) PushKey(code, 0, mods);
+                }
+            }
+        }
+
+        private void PushKey(int scancode, int action, int mods) => PushEvent(Protocol.EventKind.KEY, scancode, action | (mods << 8));
+
+        private void PushEvent(Protocol.EventKind kind, int a, int b)
+        {
+            _bridge.TryPushEvent(true, new Protocol.RingUkEventsRecord { kind = (uint)kind, a = a, b = b });
+        }
+
         private byte _hotbarSeq;
         private byte _hotbarSlot;
         private float _scrollTotal;
@@ -108,8 +202,24 @@ namespace UltraCraft
             float dx = delta.x;
             float dy = delta.y;
 
+            // Mouse passthrough: while a Minecraft screen is open the mouse is Minecraft's
+            // cursor, not the camera.
+            bool screenOpen = HudView.McScreenOpen;
+            float cursorX = 0f, cursorY = 0f;
+            if (screenOpen)
+            {
+                dx = 0f;
+                dy = 0f;
+                Vector3 mp = UnityEngine.Input.mousePosition;              // pixels, origin bottom-left
+                cursorX = mp.x / HudView.GuiScale;
+                cursorY = (Screen.height - mp.y) / HudView.GuiScale;       // GUI y grows downward
+            }
+            ForwardKeyEvents(screenOpen);
+
             // Edge-triggered so a held key does not reopen the inventory every frame.
-            bool inventory = UnityEngine.Input.GetKeyDown(KeyCode.E);
+            // E now reaches Minecraft as a real key event (ForwardKeyEvents), so the one-sample
+            // inventory flag is no longer sent.
+            bool inventory = false;
             bool inventoryEdge = inventory && !_lastInventory;
             _lastInventory = inventory;
 
@@ -143,6 +253,9 @@ namespace UltraCraft
                 // Minecraft lays its GUI out for this screen (its GUI is replayed here).
                 screenWidth = (ushort)Mathf.Clamp(Screen.width, 0, 65535),
                 screenHeight = (ushort)Mathf.Clamp(Screen.height, 0, 65535),
+                cursorX = cursorX,
+                cursorY = cursorY,
+                cursorActive = screenOpen ? (byte)1 : (byte)0,
             });
 
             // Reported for diagnostics only.

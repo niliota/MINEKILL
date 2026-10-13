@@ -2124,3 +2124,59 @@ capture hook catches its own exceptions (element skipped, logged once) so Minecr
 never be broken by it.
 
 User confirmed: the replayed Minecraft GUI is fine (crash fix included).
+
+---
+
+## 2026-10-13 — Mouse and keyboard passthrough; Minecraft's pause menu (awaiting playtest)
+
+User: GUI fine. Needs mouse passthrough (also for the inventory), T (chat) and / (command) in
+Minecraft, and ~ for Minecraft's Esc menu ("is having both pause menus a good idea?"). Answer:
+yes, but Minecraft's pause screen freezes its single-player world while ULTRAKILL would keep
+running, so ULTRAKILL's time is frozen while a Minecraft pause screen is open.
+
+**Verified (26.3 bytecode):** `KeyboardHandler.keyPress(long, int, KeyEvent)` and
+`charTyped(long, CharacterEvent)` start with the same `window == 0 -> return` guard as onButton;
+screens read the cursor as `xpos * getGuiScaledWidth() / getScreenWidth()`;
+`OptionsManager.Update` begins `if (frozen) return;` (ULTRAKILL's own switch for ignoring its
+pause key); `FistControl.NoFist/YesFist` public.
+
+**Found:** the UK_EVENTS ring (in the protocol since day one, never used) would have thrown on its
+first push: C# `TryPushEvent` wrote the 24-byte padded record size from a 20-byte struct. Fixed
+(writes the struct's size; barrier before publishing head); Java pop gets an acquire fence and an
+unsigned modulo. Generator now emits event kinds from its table (was hard-coded twice).
+
+**Protocol:** EV_KEY (a = GLFW key, b = action | mods << 8), EV_CHAR (a = code point); INPUT +=
+cursorX/cursorY (GUI px) + cursorActive (50 bytes; SelfTest copy updated); GUI header +=
+screenOpen, pauseScreen.
+
+**ULTRAKILL:** `InputForwarder` maps Unity keys to GLFW codes. Outside Minecraft screens it sends
+T, /, E, Q and ~ (as Esc). Inside a screen it sends every mapped key (Backspace/Delete/arrows
+auto-repeat 500 ms / 50 ms), `Input.inputString` characters, the cursor in GUI pixels, and zero
+look delta. `HudView.LateTick` (after ULTRAKILL's code) while a screen is open: cursor unlocked
+and visible, `OptionsManager.frozen` (so Esc reaches only Minecraft), fists off; during a
+Minecraft pause screen `Time.timeScale = 0`. Everything undone on close, only if we set it. The
+old one-sample inventory flag is no longer sent (E is a real key event).
+
+**Minecraft:** events replayed through `KeyboardHandler.keyPress/charTyped` with the real handle;
+cursor through `onMove(handle, x, y, 0, 0)` with the inverse scaling; movement keys released and
+hotbar-counter selection skipped while a screen is open; both isMouseGrabbed redirects now
+require no screen open (else moving the cursor in an inventory would turn the player).
+
+**Playtest: no new key did anything.** Measured: the shared file showed 152 events pushed and all
+popped; the new diagnostics showed every press reaching `keyPress` with no screen open (E = 69,
+Esc = 256, / = 47, Q = 81) and no screen ever opening — not even the inventory (keymapping path),
+let alone the pause menu (direct path). Static reading of `keyPress` said Esc must reach
+`pauseGame`; no exceptions were thrown.
+
+**Cause: Minecraft 26.x input is SDL3, not GLFW.** `KeyEvent.isEscape()` is `input() == 41`;
+`InputConstants.KEY_ESCAPE = 41, KEY_E = 8, KEY_T = 23, KEY_SLASH = 56, KEY_GRAVE = 53, ...` (SDL3
+scancodes), modifiers `MOD_SHIFT = 3, MOD_CONTROL = 192, MOD_ALT = 768` (SDL bits; ALT does not fit
+the 8 bits the event used). The forwarder sent GLFW key codes: E (69) arrived as F12, Q (81) as the
+Down arrow, Esc (256) as nothing. The earlier "26.3 numbers mouse buttons from 1" finding is the same
+fact (SDL_BUTTON_LEFT = 1, RIGHT = 3), misattributed at the time; comment corrected.
+**Fix:** Unity key -> SDL3 scancode table (A=4..Z=29, 1=30..9=38, 0=39, Return 40, Esc 41, ...,
+LCtrl 224, LShift 225, LAlt 226, RCtrl 228, RShift 229, RAlt 230); SDL modifier bits; modifiers now
+`b >>> 8` (no 8-bit truncation). Also fixed: SelfTest's copied seqEnd offset (27 -> 46). The key and
+screen diagnostics stay for one confirmation run.
+
+User confirmed: keyboard and mouse passthrough work (inventory, chat, commands, pause). Open: Backspace does nothing; inventory background panel not rendered.

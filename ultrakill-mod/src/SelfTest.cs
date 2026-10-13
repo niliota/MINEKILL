@@ -71,10 +71,13 @@ namespace UltraCraft
             new Expect("scrollTotal", 29),
             new Expect("screenWidth", 33),
             new Expect("screenHeight", 35),
-            new Expect("seqEnd",      27),
+            new Expect("cursorX",     37),
+            new Expect("cursorY",     41),
+            new Expect("cursorActive", 45),
+            new Expect("seqEnd",      46),
         };
 
-        private const int ExpectedInputSize = 41;
+        private const int ExpectedInputSize = 50;
 
         // Probe values. Deliberately not real input: a key bit pattern that is not
         // reachable from the keyboard, and floats that are not small enough to collapse

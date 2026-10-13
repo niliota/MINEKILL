@@ -63,6 +63,7 @@ public abstract class MinecraftMixin {
                     value = "INVOKE",
                     target = "Lnet/minecraft/client/MouseHandler;isMouseGrabbed()Z"))
     private boolean ultracraft$allowHeldAttackWithoutGrab(MouseHandler handler) {
-        return UltraCraftClient.bridgeConnected() || handler.isMouseGrabbed();
+        return (UltraCraftClient.bridgeConnected() && ((Minecraft) (Object) this).gui.screen() == null)
+                || handler.isMouseGrabbed();
     }
 }

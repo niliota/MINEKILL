@@ -79,7 +79,10 @@ public abstract class MouseHandlerMixin {
                     value = "INVOKE",
                     target = "Lnet/minecraft/client/MouseHandler;isMouseGrabbed()Z"))
     private boolean ultracraft$allowTurnWithoutGrab(MouseHandler self) {
-        return UltraCraftClient.bridgeConnected() || self.isMouseGrabbed();
+        // Not while a Minecraft screen is open: then the mouse drives Minecraft's cursor
+        // (passthrough), and vanilla does not turn the player either.
+        return (UltraCraftClient.bridgeConnected() && net.minecraft.client.Minecraft.getInstance().gui.screen() == null)
+                || self.isMouseGrabbed();
     }
 
     @Inject(method = "grabMouse", at = @At("HEAD"), cancellable = true)

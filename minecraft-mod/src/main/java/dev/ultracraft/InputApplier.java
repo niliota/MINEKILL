@@ -32,8 +32,8 @@ final class InputApplier {
     private static final Logger LOG = LoggerFactory.getLogger(UltraCraftClient.MOD_ID);
 
     /** GLFW/LWJGL mouse button codes, which are also what Minecraft's own handlers use. */
-    // Minecraft 26.3 numbers mouse buttons from 1 (InputConstants: LEFT = 1, MIDDLE = 2,
-    // RIGHT = 3), not GLFW's 0 = left, 1 = right. Hard-coding 0/1 made a forwarded LEFT press
+    // Minecraft 26.x input is SDL3, not GLFW: mouse buttons are SDL's (InputConstants: LEFT = 1,
+    // MIDDLE = 2, RIGHT = 3), not GLFW's 0 = left, 1 = right (and keys are SDL scancodes). Hard-coding 0/1 made a forwarded LEFT press
     // an unbound button 0 (no click; only the held state broke blocks, after 3-4 presses) and
     // a forwarded RIGHT press a LEFT click (break-then-replace), measured 2026-10-13:
     // "RMB=true ... clickCounter attack=1". Use Minecraft's own constants.
@@ -75,7 +75,10 @@ final class InputApplier {
 
         // While H-locked (PlayerSafety) movement keys are dropped, so the player stays put
         // instead of stepping a tick's worth and being snapped back.
-        int keys = PlayerSafety.locked() ? 0 : in.keys;
+        // While a Minecraft screen is open (inventory, chat, pause) keys go to the screen as
+        // events (applyEvents), and held movement keys are released, as in vanilla.
+        boolean screenOpen = mc.gui.screen() != null;
+        int keys = PlayerSafety.locked() || screenOpen ? 0 : in.keys;
         set(mc.options.keyUp,    (keys & Protocol.KEY_FORWARD) != 0);
         set(mc.options.keyDown,  (keys & Protocol.KEY_BACK) != 0);
         set(mc.options.keyLeft,  (keys & Protocol.KEY_LEFT) != 0);
@@ -116,6 +119,8 @@ final class InputApplier {
         wasUse = in.use;
 
         applyHotbarAndScroll(mc, in);
+        applyCursor(mc, in);
+        applyEvents(mc);
 
         set(mc.options.keyAttack, in.attack);
         set(mc.options.keyUse, in.use);
@@ -304,7 +309,9 @@ final class InputApplier {
             lastHotbarSeq = in.hotbarSeq;
         } else if (in.hotbarSeq != lastHotbarSeq) {
             lastHotbarSeq = in.hotbarSeq;
-            if (mc.player != null && in.hotbarSlot >= 0 && in.hotbarSlot < 9) {
+            // Inside a screen the number keys arrive as real key events and do what vanilla does
+            // there (swap the hovered item into that slot); selecting here too would be wrong.
+            if (mc.gui.screen() == null && mc.player != null && in.hotbarSlot >= 0 && in.hotbarSlot < 9) {
                 mc.player.getInventory().setSelectedSlot(in.hotbarSlot);
             }
         }
@@ -317,6 +324,67 @@ final class InputApplier {
                 mc.mouseHandler.onScroll(mc.getWindow().handle(), 0.0, steps);
             } catch (Throwable t) {
                 LOG.warn("[UltraCraft] scroll forward failed: {}", t.toString());
+            }
+        }
+    }
+
+    private float lastCursorX = Float.NaN, lastCursorY = Float.NaN;
+
+    /**
+     * Mouse passthrough: while a Minecraft screen is open, ULTRAKILL sends its cursor in
+     * Minecraft GUI pixels. Screens read the cursor as {@code xpos * guiScaledWidth / screenWidth}
+     * (verified, MouseHandler.getScaledXPos), so xpos is set to the inverse, through
+     * {@code onMove} with the REAL window handle (0 is rejected) so hovering and dragging reach
+     * the screen. Its delta bookkeeping cannot turn the player: the turn gate is closed while a
+     * screen is open (MouseHandlerMixin).
+     */
+    private void applyCursor(Minecraft mc, Bridge.InputState in) {
+        if (!in.cursorActive || mc.gui.screen() == null || !dev.ultracraft.gui.GuiLayout.active()) {
+            lastCursorX = lastCursorY = Float.NaN;
+            return;
+        }
+        if (in.cursorX == lastCursorX && in.cursorY == lastCursorY) return;
+        lastCursorX = in.cursorX;
+        lastCursorY = in.cursorY;
+        var w = mc.getWindow();
+        double x = in.cursorX * (double) w.getScreenWidth() / dev.ultracraft.gui.GuiLayout.scaledWidth();
+        double y = in.cursorY * (double) w.getScreenHeight() / dev.ultracraft.gui.GuiLayout.scaledHeight();
+        try {
+            mc.mouseHandler.onMove(w.handle(), x, y, 0, 0);
+        } catch (Throwable t) {
+            LOG.warn("[UltraCraft] cursor forward failed: {}", t.toString());
+        }
+    }
+
+    /**
+     * Keyboard passthrough: key and character events from ULTRAKILL (UK_EVENTS ring), replayed
+     * through Minecraft's own KeyboardHandler with the REAL window handle (keyPress and charTyped
+     * both start with the window == 0 -> return guard). So T opens chat, / the command line, E the
+     * inventory, Esc (ULTRAKILL's ~) the pause menu, and inside a screen every key and typed
+     * character reaches it, exactly as from Minecraft's own window.
+     */
+    private int eventsLogged;   // DIAGNOSTIC (2026-10-13: "none of the buttons work")
+
+    private void applyEvents(Minecraft mc) {
+        long handle = mc.getWindow().handle();
+        for (int i = 0; i < 256; i++) {
+            Bridge.Event e = bridge.popEvent();
+            if (e == null) return;
+            try {
+                var before = mc.gui.screen();
+                if (eventsLogged < 60) {
+                    eventsLogged++;
+                    LOG.info("[UltraCraft] keys: event kind={} a={} b={} screen={}", e.kind, e.a, e.b,
+                            before == null ? "none" : before.getClass().getSimpleName());
+                }
+                if (e.kind == Protocol.EV_KEY) {
+                    mc.keyboardHandler.keyPress(handle, e.b & 0xFF,
+                            new net.minecraft.client.input.KeyEvent(e.a, 0, e.b >>> 8));
+                } else if (e.kind == Protocol.EV_CHAR) {
+                    mc.keyboardHandler.charTyped(handle, new net.minecraft.client.input.CharacterEvent(e.a));
+                }
+            } catch (Throwable t) {
+                LOG.warn("[UltraCraft] key event {} failed: {}", e.kind, t.toString());
             }
         }
     }
