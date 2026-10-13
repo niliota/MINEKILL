@@ -59,6 +59,20 @@
       <HintPath>$(GameDir)/ULTRAKILL_Data/Managed/UnityEngine.InputLegacyModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <!-- The native Minecraft HUD draws with IMGUI (OnGUI, GUI.Label, GUIStyle). -->
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath>$(GameDir)/ULTRAKILL_Data/Managed/UnityEngine.IMGUIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <!-- Canvas, to hide ULTRAKILL's own health/stamina HUD panel. -->
+    <Reference Include="UnityEngine.UIModule">
+      <HintPath>$(GameDir)/ULTRAKILL_Data/Managed/UnityEngine.UIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath>$(GameDir)/ULTRAKILL_Data/Managed/UnityEngine.TextRenderingModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <!-- ULTRAKILL reads its own look input through Unity's Input System
          (CameraController: InputSource.Look.ReadValue<Vector2>()), not the legacy Input
          class. Reading the same source is what lets forwarded camera deltas survive

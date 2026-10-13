@@ -9,7 +9,7 @@ namespace UltraCraft.Bridge
         public const uint MAGIC = 0x55544C52u;
         public const uint VERSION = 1u;
         public const int HEADER_SIZE = 56;
-        public const int TOTAL_SIZE = 184712;
+        public const int TOTAL_SIZE = 185344;
         public const int SEQ_SIZE = 4;
 
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -35,15 +35,15 @@ namespace UltraCraft.Bridge
         public const int OFFSET_CAMERA = 128;
         public const int SLOTCAMERA_SIZE = 24;
         public const int OFFSET_INPUT = 152;
-        public const int SLOTINPUT_SIZE = 31;
-        public const int OFFSET_CORRECTION = 184;
+        public const int SLOTINPUT_SIZE = 37;
+        public const int OFFSET_CORRECTION = 192;
         public const int SLOTCORRECTION_SIZE = 44;
-        public const int OFFSET_LEVEL = 232;
+        public const int OFFSET_LEVEL = 240;
         public const int SLOTLEVEL_SIZE = 60;
-        public const int OFFSET_SELECTION = 296;
+        public const int OFFSET_SELECTION = 304;
         public const int SLOTSELECTION_SIZE = 36;
-        public const int OFFSET_MC_EVENTS = 332;
-        public const int OFFSET_UK_EVENTS = 6484;
+        public const int OFFSET_MC_EVENTS = 340;
+        public const int OFFSET_UK_EVENTS = 6492;
 
         public const uint FLAG_UK_MOVEMENT = 1u << 0;
         public const uint FLAG_UK_PAUSED = 1u << 1;
@@ -99,6 +99,9 @@ namespace UltraCraft.Bridge
             public byte attack;            // held, left mouse button
             public byte use;               // held, right mouse button
             public byte inventory;         // edge-triggered: true for one sample when pressed
+            public byte hotbarSeq;         // bumps on every hotbar key press (1-9) in ULTRAKILL; Minecraft acts when it changes
+            public byte hotbarSlot;        // slot 0-8 of the latest hotbar key press
+            public float scrollTotal;      // running sum of mouse-wheel steps; Minecraft applies the difference
             public uint seqEnd;      // must equal seq
         }
 
@@ -169,7 +172,7 @@ namespace UltraCraft.Bridge
             public RingMcEventsRecord[] records;      // 256 entries
         }
 
-        public const int RINGMCEVENTS_OFFSET = 332;
+        public const int RINGMCEVENTS_OFFSET = 340;
         public const int RINGMCEVENTS_CAPACITY = 256;
         public const int RINGMCEVENTS_RECORD_SIZE = 24;
         public const int RINGMCEVENTS_OFF_HEAD = 0;
@@ -194,7 +197,7 @@ namespace UltraCraft.Bridge
             public RingUkEventsRecord[] records;      // 256 entries
         }
 
-        public const int RINGUKEVENTS_OFFSET = 6484;
+        public const int RINGUKEVENTS_OFFSET = 6492;
         public const int RINGUKEVENTS_CAPACITY = 256;
         public const int RINGUKEVENTS_RECORD_SIZE = 24;
         public const int RINGUKEVENTS_OFF_HEAD = 0;
@@ -219,6 +222,10 @@ namespace UltraCraft.Bridge
         public const int STREAM_MSG_CLEAR_ALL = 1;  // drop every section and the atlas
         public const int STREAM_MSG_ATLAS = 2;  // u32 width, u32 height, RGBA8 rows top to bottom
         public const int STREAM_MSG_SECTION = 3;  // i32 sx, sy, sz, u32 vertexCount, vertices (0 = remove section)
+        public const int STREAM_MSG_EXTRA_ATLAS = 4;  // u32 atlasId (1 items, 2 gui), u32 width, u32 height, RGBA8 rows top to bottom
+        public const int STREAM_MSG_GUI_SPRITES = 5;  // u32 count, then per sprite: u16 nameLength, name (ASCII), f32 u0,v0,u1,v1, i32 width,height (pixels)
+        public const int STREAM_ATLAS_ITEMS = 1;
+        public const int STREAM_ATLAS_GUI = 2;
         public const int STREAM_SECTION_HEADER = 16;
         public const int STREAM_VERTEX_SIZE = 28;  // triangle list, 3 vertices per triangle
         public const int STREAM_VTX_OFF_POS = 0;  // f32 x3, block units relative to the section origin
@@ -227,7 +234,7 @@ namespace UltraCraft.Bridge
         public const int STREAM_VTX_OFF_FLAGS = 24;  // u32: bits 0-3 block light, 8-11 sky light, 16 translucent, 17 cutout (neither = solid)
 
         // Tables: one seqlock over a header and a list of fixed-size records.
-        public const int TBL_COLLISION_OFFSET = 12640;  // ULTRAKILL -> Minecraft: ULTRAKILL collision boxes near the player, already in Minecraft block coords
+        public const int TBL_COLLISION_OFFSET = 12648;  // ULTRAKILL -> Minecraft: ULTRAKILL collision boxes near the player, already in Minecraft block coords
         public const int TBL_COLLISION_SIZE = 98328;
         public const int TBL_COLLISION_CAPACITY = 4096;
         public const int TBL_COLLISION_OFF_SEQ = 0;  // seqlock, odd while writing
@@ -242,7 +249,41 @@ namespace UltraCraft.Bridge
         public const int TBL_COLLISION_REC_OFF_MAXX = 12;
         public const int TBL_COLLISION_REC_OFF_MAXY = 16;
         public const int TBL_COLLISION_REC_OFF_MAXZ = 20;
-        public const int TBL_PARTICLES_OFFSET = 110968;  // Minecraft -> ULTRAKILL: Minecraft's live block particles (TerrainParticle), interpolated, for ULTRAKILL to draw as billboards
+        public const int TBL_HUD_OFFSET = 110976;  // Minecraft -> ULTRAKILL: what Minecraft's HUD shows, for ULTRAKILL to draw it natively; records = 9 hotbar slots then the offhand
+        public const int TBL_HUD_SIZE = 624;
+        public const int TBL_HUD_CAPACITY = 10;
+        public const int TBL_HUD_OFF_SEQ = 0;  // seqlock, odd while writing
+        public const int TBL_HUD_OFF_TICKTIMESTAMP = 4;  // epoch ms of the frame that sampled it
+        public const int TBL_HUD_OFF_COUNT = 12;  // valid item records (10)
+        public const int TBL_HUD_OFF_SELECTED = 16;  // selected hotbar slot 0-8
+        public const int TBL_HUD_OFF_GAMEMODE = 20;  // 0 survival, 1 creative, 2 adventure, 3 spectator
+        public const int TBL_HUD_OFF_HEALTH = 24;  // half-hearts
+        public const int TBL_HUD_OFF_MAXHEALTH = 28;
+        public const int TBL_HUD_OFF_ABSORPTION = 32;
+        public const int TBL_HUD_OFF_FOOD = 36;  // 0-20
+        public const int TBL_HUD_OFF_ARMOR = 40;  // 0-20
+        public const int TBL_HUD_OFF_XPLEVEL = 44;
+        public const int TBL_HUD_OFF_XPPROGRESS = 48;  // 0-1 towards the next level
+        public const int TBL_HUD_OFF_AIR = 52;  // air supply
+        public const int TBL_HUD_OFF_MAXAIR = 56;
+        public const int TBL_HUD_OFF_HIDEGUI = 60;  // 1 while F1 hides the HUD
+        public const int TBL_HUD_OFF_RECORDS = 64;
+        public const int TBL_HUD_RECORD_SIZE = 56;
+        public const int TBL_HUD_REC_OFF_KIND = 0;  // 0 empty, 1 flat icon (uv0), 2 block cube (uv0 top, uv1 side)
+        public const int TBL_HUD_REC_OFF_ITEMCOUNT = 4;  // stack size
+        public const int TBL_HUD_REC_OFF_DAMAGE = 8;  // durability left 0-1, or -1 for no bar
+        public const int TBL_HUD_REC_OFF_ATLAS = 12;  // atlas of uv0/uv1: 0 blocks, 1 items
+        public const int TBL_HUD_REC_OFF_U0 = 16;  // icon or cube-top UV rectangle
+        public const int TBL_HUD_REC_OFF_V0 = 20;
+        public const int TBL_HUD_REC_OFF_U1 = 24;
+        public const int TBL_HUD_REC_OFF_V1 = 28;
+        public const int TBL_HUD_REC_OFF_SU0 = 32;  // cube-side UV rectangle
+        public const int TBL_HUD_REC_OFF_SV0 = 36;
+        public const int TBL_HUD_REC_OFF_SU1 = 40;
+        public const int TBL_HUD_REC_OFF_SV1 = 44;
+        public const int TBL_HUD_REC_OFF_TINTTOP = 48;  // rgba, r in the low byte (grass, leaves)
+        public const int TBL_HUD_REC_OFF_TINTSIDE = 52;
+        public const int TBL_PARTICLES_OFFSET = 111600;  // Minecraft -> ULTRAKILL: Minecraft's live block particles (TerrainParticle), interpolated, for ULTRAKILL to draw as billboards
         public const int TBL_PARTICLES_SIZE = 73744;
         public const int TBL_PARTICLES_CAPACITY = 2048;
         public const int TBL_PARTICLES_OFF_SEQ = 0;  // seqlock, odd while writing

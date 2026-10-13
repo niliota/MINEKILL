@@ -97,6 +97,9 @@ public final class WorldMesher {
         ByteBuffer header = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN)
                 .putInt(atlas.width).putInt(atlas.height).flip();
         if (!stream.tryWrite(Protocol.STREAM_MSG_ATLAS, header, atlas.pixels.duplicate().clear())) return false;
+        if (!sendExtraAtlas(mc, net.minecraft.data.AtlasIds.ITEMS, Protocol.STREAM_ATLAS_ITEMS)) return false;
+        if (!sendExtraAtlas(mc, net.minecraft.data.AtlasIds.GUI, Protocol.STREAM_ATLAS_GUI)) return false;
+        if (!sendGuiSprites(mc)) return false;
         LOG.info("[UltraCraft] world: sent {}x{} block atlas ({} MB) for resync request {}",
                 atlas.width, atlas.height, atlas.width * atlas.height * 4 / (1024 * 1024), servedRequest);
 
@@ -118,6 +121,39 @@ public final class WorldMesher {
         stream.markResyncServed(servedRequest);
         resendPending = false;
         return true;
+    }
+
+    /** Item icons and HUD sprites (for the native HUD), from Minecraft's loaded atlases. */
+    private boolean sendExtraAtlas(Minecraft mc, net.minecraft.resources.Identifier id, int atlasId) {
+        AtlasExport a = AtlasExport.build(mc, id);
+        ByteBuffer h = ByteBuffer.allocate(12).order(ByteOrder.LITTLE_ENDIAN)
+                .putInt(atlasId).putInt(a.width).putInt(a.height).flip();
+        boolean ok = stream.tryWrite(Protocol.STREAM_MSG_EXTRA_ATLAS, h, a.pixels.duplicate().clear());
+        if (ok) LOG.info("[UltraCraft] world: sent {} atlas {}x{}", id, a.width, a.height);
+        return ok;
+    }
+
+    /** HUD sprites ULTRAKILL draws, by name, with their rectangles in the GUI atlas. */
+    static final String[] GUI_SPRITES = {
+        "hud/hotbar", "hud/hotbar_selection", "hud/hotbar_offhand_left", "hud/crosshair",
+        "hud/experience_bar_background", "hud/experience_bar_progress",
+        "hud/heart/container", "hud/heart/full", "hud/heart/half",
+        "hud/food_empty", "hud/food_half", "hud/food_full",
+        "hud/armor_empty", "hud/armor_half", "hud/armor_full",
+    };
+
+    private boolean sendGuiSprites(Minecraft mc) {
+        var gui = mc.getAtlasManager().getAtlasOrThrow(net.minecraft.data.AtlasIds.GUI);
+        ByteBuffer b = ByteBuffer.allocate(4096).order(ByteOrder.LITTLE_ENDIAN);
+        b.putInt(GUI_SPRITES.length);
+        for (String name : GUI_SPRITES) {
+            var sprite = gui.getSprite(net.minecraft.resources.Identifier.withDefaultNamespace(name));
+            byte[] n = name.getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+            b.putShort((short) n.length).put(n);
+            b.putFloat(sprite.getU0()).putFloat(sprite.getV0()).putFloat(sprite.getU1()).putFloat(sprite.getV1());
+            b.putInt(sprite.contents().width()).putInt(sprite.contents().height());
+        }
+        return stream.tryWrite(Protocol.STREAM_MSG_GUI_SPRITES, b.flip());
     }
 
     private void meshDirty(ClientLevel level) {

@@ -2038,3 +2038,39 @@ vertex colour, no scene light. Blocks look shaded because Minecraft bakes face s
 into vertex colour and the solid material (Master clone, VERTEX_LIGHTING, fog) lights it. Particles
 now always use the vertex-lit cutout material (F10 [4]: the solid layer's Master clone + alpha test),
 independent of the blocks' cutout choice; billboard normals face the camera for the vertex lighting.
+
+---
+
+## 2026-10-13 — HUD milestone, first pass (awaiting playtest)
+
+Native Minecraft HUD in ULTRAKILL; no images cross.
+
+**Verified in 26.3:** HUD sprites are in the GUI atlas (`AtlasIds.GUI`): hud/hotbar,
+hotbar_selection, hotbar_offhand_left, crosshair, experience_bar_background/progress,
+heart/container|full|half, food_empty|half|full, armor_empty|half|full. `Inventory.getItem(i)`,
+`getSelectedSlot/setSelectedSlot` public. Item icon = `ItemModelResolver.updateForTopItem(..., GUI)` +
+`ItemStackRenderState.pickParticleMaterial`. Quads expose `materialInfo().isTinted()/tintIndex()`;
+`BlockColors.getTintSource(state, index).color(state)`. `MouseHandler.onScroll` has the same
+`window == 0 -> return` guard as onButton (so the real handle from the start). No F1 hide-GUI flag
+is exposed on Options/Minecraft/Gui in 26.3; `hideGui` is sent as 0 for now.
+
+**Protocol:** INPUT gains `hotbarSeq`, `hotbarSlot` (u8) and `scrollTotal` (f32): counters, so a
+missed sample loses nothing (INPUT 31 -> 37 bytes; later offsets shift; SelfTest's copied offsets
+and size updated). STREAM gains EXTRA_ATLAS (items / gui) and GUI_SPRITES (name -> UV rect + pixel
+size). New HUD table (Minecraft -> ULTRAKILL): selected, game mode, health/max/absorption, food,
+armour, XP level/progress, air, and 10 item records (9 hotbar + offhand): kind (flat / cube), count,
+durability, atlas, top & side UVs, top & side tints.
+
+**Minecraft:** `HudExport` each frame; icons cached per item: full-cube blocks -> top/side sprites
+and tints from their model (isometric cube in ULTRAKILL); others -> the GUI item model's sprite.
+Resync now also sends the item and GUI atlases and the HUD sprite table.
+`InputApplier.applyHotbarAndScroll`: slot via setSelectedSlot; wheel via onScroll(handle, 0, steps).
+
+**ULTRAKILL:** keys 1-9 and `Input.mouseScrollDelta` forwarded. `HudView` draws in OnGUI with GL
+quads (Sprites/Default, pixel matrix y-down) at Minecraft's automatic GUI scale, positions from
+26.3's Gui layout; creative/spectator show only hotbar + crosshair. Counts and XP level via
+GUI.Label (Unity's font for now, with Minecraft-style shadow). Hides HudController.gunCanvas
+(ULTRAKILL's health/stamina panel) and ULTRAKILL's Crosshair objects. csproj gains
+UnityEngine.IMGUIModule, UIModule and TextRenderingModule references.
+
+User: everything in the HUD first pass works. Requests next: Minecraft's font, real non-cube item icons, and ALL of the HUD (animations etc.).

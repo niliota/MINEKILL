@@ -441,6 +441,26 @@ namespace UltraCraft.Bridge
             return -1;
         }
 
+        /// <summary>
+        /// Copy the whole HUD table (header + records) under its seqlock into <paramref name="dst"/>,
+        /// laid out at the generated TBL_HUD_* offsets relative to the table start. False if no clean copy.
+        /// </summary>
+        public bool ReadHudTable(byte[] dst)
+        {
+            if (!Connected || dst.Length < Protocol.TBL_HUD_SIZE) return false;
+            int b = Protocol.TBL_HUD_OFFSET;
+            for (int attempt = 0; attempt < 3; attempt++)
+            {
+                uint s1 = _view.ReadUInt32(b + Protocol.TBL_HUD_OFF_SEQ);
+                if ((s1 & 1) != 0) { Thread.SpinWait(16); continue; }
+                Thread.MemoryBarrier();
+                _view.ReadArray(b, dst, 0, Protocol.TBL_HUD_SIZE);
+                Thread.MemoryBarrier();
+                if (_view.ReadUInt32(b + Protocol.TBL_HUD_OFF_SEQ) == s1) return true;
+            }
+            return false;
+        }
+
         public void WriteSlot(int offset, Protocol.SlotInput value)
         {
             WriteSlot(offset, ToBytes(value), Marshal.SizeOf(typeof(Protocol.SlotInput)));

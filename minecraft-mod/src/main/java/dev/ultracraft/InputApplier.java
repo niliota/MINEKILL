@@ -115,6 +115,8 @@ final class InputApplier {
         wasAttack = in.attack;
         wasUse = in.use;
 
+        applyHotbarAndScroll(mc, in);
+
         set(mc.options.keyAttack, in.attack);
         set(mc.options.keyUse, in.use);
 
@@ -281,6 +283,40 @@ final class InputApplier {
             mc.mouseHandler.onButton(mc.getWindow().handle(), new MouseButtonInfo(button, 0), pressed ? 1 : 0);
         } catch (Throwable t) {
             LOG.warn("[UltraCraft] mouse button {} forward failed: {}", button, t.toString());
+        }
+    }
+
+    private int lastHotbarSeq = -1;
+    private float lastScroll = Float.NaN;
+
+    /**
+     * Hotbar keys 1-9 and the mouse wheel, pressed in ULTRAKILL (HUD milestone). Both arrive as
+     * counters (a sequence number with the latest slot; a running wheel total), so a sample
+     * Minecraft misses loses nothing. The first sample only records the baseline.
+     *
+     * <p>Keys select the slot directly. The wheel goes through Minecraft's own
+     * {@code MouseHandler.onScroll}, which needs the REAL window handle: verified in the 26.3
+     * bytecode, it starts with the same {@code window == 0 -> return} guard as onButton.
+     */
+    private void applyHotbarAndScroll(Minecraft mc, Bridge.InputState in) {
+        if (lastHotbarSeq < 0) {
+            lastHotbarSeq = in.hotbarSeq;
+        } else if (in.hotbarSeq != lastHotbarSeq) {
+            lastHotbarSeq = in.hotbarSeq;
+            if (mc.player != null && in.hotbarSlot >= 0 && in.hotbarSlot < 9) {
+                mc.player.getInventory().setSelectedSlot(in.hotbarSlot);
+            }
+        }
+        if (Float.isNaN(lastScroll)) {
+            lastScroll = in.scrollTotal;
+        } else if (in.scrollTotal != lastScroll) {
+            double steps = in.scrollTotal - lastScroll;
+            lastScroll = in.scrollTotal;
+            try {
+                mc.mouseHandler.onScroll(mc.getWindow().handle(), 0.0, steps);
+            } catch (Throwable t) {
+                LOG.warn("[UltraCraft] scroll forward failed: {}", t.toString());
+            }
         }
     }
 
