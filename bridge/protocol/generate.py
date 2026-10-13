@@ -510,9 +510,9 @@ EVENT_KINDS = {
     # Minecraft hurt an ULTRAKILL enemy's proxy (MC_EVENTS ring): a = enemy id, c = Minecraft damage
     # (before ULTRAKILL's own multipliers), d = 1 if fire/explosion.
     "ENTITY_ATTACKED": 3,
-    # ULTRAKILL hurt the player (UK_EVENTS ring): a = ULTRAKILL damage (of 100 HP), negative for an
-    # explosion; b = Float.floatToIntBits(x), c = y, d = z: where it came from (Minecraft coords,
-    # x NaN if unknown), so a shield can block it.
+    # ULTRAKILL hurt the player (UK_EVENTS ring): a = ULTRAKILL damage (of 100 HP) | kind << 16
+    # (0 melee, 1 projectile, 2 explosion); b = the attacking enemy's id (ENEMIES table), 0 if
+    # unknown. Minecraft attributes the damage to that enemy's proxy, so shields and armour apply.
     "PLAYER_HURT": 4,
     "LEVEL_LOADED": 5,
     # Minecraft's player respawned after dying (MC_EVENTS ring): ULTRAKILL restarts its checkpoint.

@@ -209,45 +209,53 @@ namespace Minekill
             if (self == null || !self._bridge.Connected || !self._puppet.MappingReady) return true;
             if (__instance.dead || damage <= 0) return false;
             if (invincible && __instance.gameObject.layer == 15 && !ignoreInvincibility) return false;
-            // Where the hit came from, so a raised shield can block it: GetHurt does not say, so
-            // the nearest enemy projectile right at the player, else the nearest enemy.
-            Vector3 from = self.AttackerPosition(__instance.transform.position, out bool found);
-            Vector3 mc = found ? self._puppet.UkToMc(from) : Vector3.zero;
+            // Who hit: GetHurt does not say. A projectile right at the player means its shooter (the
+            // enemy best lined up behind it); otherwise the nearest enemy. Minecraft attributes the
+            // damage to that enemy's proxy, which is what lets a shield block it.
+            int kind = explosion ? 2 : 0;
+            int attacker = self.Attacker(__instance.transform.position, ref kind);
             self._bridge.TryPushEvent(true, new Protocol.RingUkEventsRecord
             {
                 kind = (uint)Protocol.EventKind.PLAYER_HURT,
-                a = explosion ? -damage : damage,
-                b = BitConverter.ToInt32(BitConverter.GetBytes(found ? mc.x : float.NaN), 0),
-                c = mc.y,
-                d = mc.z,
+                a = Mathf.Min(damage, 0xFFFF) | (kind << 16),
+                b = attacker,
             });
             return false;
         }
 
         public bool Patched => _patched;
 
-        private Vector3 AttackerPosition(Vector3 player, out bool found)
+        /// <summary>The id of the enemy that most likely landed this hit, or 0. Sets kind 1 for a projectile.</summary>
+        private int Attacker(Vector3 player, ref int kind)
         {
-            found = false;
-            Vector3 best = Vector3.zero;
+            Projectile shot = null;
             float bestSq = (4f * _puppet.Scale) * (4f * _puppet.Scale);   // a projectile within 4 blocks
             foreach (Projectile p in UnityEngine.Object.FindObjectsOfType<Projectile>())
             {
                 if (p == null || !p.isActiveAndEnabled) continue;
                 float d = (p.transform.position - player).sqrMagnitude;
-                if (d < bestSq) { bestSq = d; best = p.transform.position; found = true; }
+                if (d < bestSq) { bestSq = d; shot = p; }
             }
-            if (found) return best;
-            bestSq = float.MaxValue;
+            if (shot != null && kind == 0) kind = 1;
             var tracker = MonoSingleton<EnemyTracker>.Instance;
-            if (tracker == null) return best;
+            if (tracker == null) return 0;
+            EnemyIdentifier best = null;
+            float bestScore = float.MaxValue;
             foreach (EnemyIdentifier eid in tracker.enemies)
             {
-                if (eid == null || eid.dead) continue;
-                float d = (eid.transform.position - player).sqrMagnitude;
-                if (d < bestSq) { bestSq = d; best = eid.transform.position; found = true; }
+                if (eid == null || eid.dead || !_byId.ContainsKey(eid.GetInstanceID())) continue;
+                float score;
+                if (shot != null)
+                {
+                    // Lined up behind the projectile's flight: smallest angle, then distance.
+                    Vector3 to = eid.transform.position - shot.transform.position;
+                    float angle = Vector3.Angle(-shot.transform.forward, to);
+                    score = angle * 1000f + to.magnitude;
+                }
+                else score = (eid.transform.position - player).sqrMagnitude;
+                if (score < bestScore) { bestScore = score; best = eid; }
             }
-            return best;
+            return best != null ? best.GetInstanceID() : 0;
         }
     }
 }
