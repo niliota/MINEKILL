@@ -29,10 +29,18 @@ public final class UkCollision {
 
     private static final Logger LOG = LoggerFactory.getLogger(UltraCraftClient.MOD_ID);
 
-    /** Immutable once published. */
-    private record Snapshot(int generation, long tickTimestamp, AABB[] boxes, VoxelShape[] shapes) {}
+    /**
+     * Immutable once published. {@code grid}: box indices per {@link #CELL}-block column cell,
+     * so a query looks at the boxes around it instead of all of them (every mob queries several
+     * times a tick, on two threads). Boxes spanning more than {@link #MAX_CELLS} cells sit in
+     * {@code big}, checked by every query.
+     */
+    private record Snapshot(int generation, long tickTimestamp, AABB[] boxes, VoxelShape[] shapes,
+                            java.util.Map<Long, int[]> grid, int[] big) {}
 
-    private static final Snapshot EMPTY = new Snapshot(-1, 0L, new AABB[0], new VoxelShape[0]);
+    private static final int CELL = 8;
+    private static final int MAX_CELLS = 64;
+    private static final Snapshot EMPTY = new Snapshot(-1, 0L, new AABB[0], new VoxelShape[0], java.util.Map.of(), new int[0]);
     private static volatile Snapshot current = EMPTY;
 
     private final Bridge.CollisionTable table = new Bridge.CollisionTable();
@@ -66,7 +74,7 @@ public final class UkCollision {
                                 table.boxes[o + 3], table.boxes[o + 4], table.boxes[o + 5]);
             shapes[i] = Shapes.create(boxes[i]);
         }
-        current = new Snapshot(table.generation, table.tickTimestamp, boxes, shapes);
+        current = index(table.generation, table.tickTimestamp, boxes, shapes);
 
         if (table.generation != lastLoggedGeneration || (lastLoggedCount == 0) != (n == 0)) {
             lastLoggedGeneration = table.generation;
@@ -77,6 +85,25 @@ public final class UkCollision {
                             boxes[0].minX, boxes[0].minY, boxes[0].minZ,
                             boxes[0].maxX, boxes[0].maxY, boxes[0].maxZ) : "");
         }
+    }
+
+    private static long cellKey(int cx, int cz) { return ((long) cx << 32) ^ (cz & 0xFFFFFFFFL); }
+
+    private static Snapshot index(int generation, long ts, AABB[] boxes, VoxelShape[] shapes) {
+        java.util.Map<Long, java.util.List<Integer>> cells = new java.util.HashMap<>();
+        java.util.List<Integer> big = new java.util.ArrayList<>();
+        for (int i = 0; i < boxes.length; i++) {
+            AABB b = boxes[i];
+            int x0 = Math.floorDiv((int) Math.floor(b.minX), CELL), x1 = Math.floorDiv((int) Math.floor(b.maxX), CELL);
+            int z0 = Math.floorDiv((int) Math.floor(b.minZ), CELL), z1 = Math.floorDiv((int) Math.floor(b.maxZ), CELL);
+            if ((long) (x1 - x0 + 1) * (z1 - z0 + 1) > MAX_CELLS) { big.add(i); continue; }
+            for (int cx = x0; cx <= x1; cx++)
+                for (int cz = z0; cz <= z1; cz++)
+                    cells.computeIfAbsent(cellKey(cx, cz), k -> new java.util.ArrayList<>()).add(i);
+        }
+        java.util.Map<Long, int[]> grid = new java.util.HashMap<>(cells.size() * 2);
+        for (var e : cells.entrySet()) grid.put(e.getKey(), e.getValue().stream().mapToInt(Integer::intValue).toArray());
+        return new Snapshot(generation, ts, boxes, shapes, grid, big.stream().mapToInt(Integer::intValue).toArray());
     }
 
     /** One-line state for the periodic log. */
@@ -101,10 +128,22 @@ public final class UkCollision {
     public static int appendShapes(AABB query, List<VoxelShape> into) {
         Snapshot s = current;
         int added = 0;
-        for (int i = 0; i < s.boxes.length; i++) {
-            if (s.boxes[i].intersects(query)) {
-                into.add(s.shapes[i]);
-                added++;
+        for (int i : s.big) {
+            if (s.boxes[i].intersects(query)) { into.add(s.shapes[i]); added++; }
+        }
+        int x0 = Math.floorDiv((int) Math.floor(query.minX), CELL), x1 = Math.floorDiv((int) Math.floor(query.maxX), CELL);
+        int z0 = Math.floorDiv((int) Math.floor(query.minZ), CELL), z1 = Math.floorDiv((int) Math.floor(query.maxZ), CELL);
+        boolean multi = x0 != x1 || z0 != z1;
+        java.util.Set<Integer> seen = multi ? new java.util.HashSet<>() : null;   // a box listed in several cells
+        for (int cx = x0; cx <= x1; cx++) {
+            for (int cz = z0; cz <= z1; cz++) {
+                int[] list = s.grid.get(cellKey(cx, cz));
+                if (list == null) continue;
+                for (int i : list) {
+                    if (!s.boxes[i].intersects(query) || (multi && !seen.add(i))) continue;
+                    into.add(s.shapes[i]);
+                    added++;
+                }
             }
         }
         return added;

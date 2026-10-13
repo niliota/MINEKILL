@@ -479,6 +479,34 @@ namespace UltraCraft.Bridge
             return -1;
         }
 
+        /// <summary>Read the COLLISION_INTEREST points (x,y,z each) into xyz; returns the count or -1.</summary>
+        public int ReadCollisionInterest(float[] xyz)
+        {
+            if (!Connected) return -1;
+            int b = Protocol.TBL_COLLISION_INTEREST_OFFSET;
+            for (int attempt = 0; attempt < 3; attempt++)
+            {
+                uint s1 = _view.ReadUInt32(b + Protocol.TBL_COLLISION_INTEREST_OFF_SEQ);
+                if ((s1 & 1) != 0) { Thread.SpinWait(16); continue; }
+                Thread.MemoryBarrier();
+                int count = (int)_view.ReadUInt32(b + Protocol.TBL_COLLISION_INTEREST_OFF_COUNT);
+                if (count < 0 || count > Protocol.TBL_COLLISION_INTEREST_CAPACITY || xyz.Length < count * 3) continue;
+                long ts = _view.ReadInt64(b + Protocol.TBL_COLLISION_INTEREST_OFF_TICKTIMESTAMP);
+                for (int i = 0; i < count; i++)
+                {
+                    int at = b + Protocol.TBL_COLLISION_INTEREST_OFF_RECORDS + i * Protocol.TBL_COLLISION_INTEREST_RECORD_SIZE;
+                    xyz[i * 3] = _view.ReadSingle(at + Protocol.TBL_COLLISION_INTEREST_REC_OFF_X);
+                    xyz[i * 3 + 1] = _view.ReadSingle(at + Protocol.TBL_COLLISION_INTEREST_REC_OFF_Y);
+                    xyz[i * 3 + 2] = _view.ReadSingle(at + Protocol.TBL_COLLISION_INTEREST_REC_OFF_Z);
+                }
+                Thread.MemoryBarrier();
+                if (_view.ReadUInt32(b + Protocol.TBL_COLLISION_INTEREST_OFF_SEQ) != s1) continue;
+                // A Minecraft that stopped writing leaves stale points: ignore them after 2 s.
+                return DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - ts > 2000 ? 0 : count;
+            }
+            return -1;
+        }
+
         /// <summary>Copy the WORLD_MODELS table (header + records) into dst under its seqlock; returns the vertex count or -1.</summary>
         public int ReadWorldModelsTable(byte[] dst)
         {

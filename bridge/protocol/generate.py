@@ -172,7 +172,7 @@ RINGS = [
 # and an older build on the other side simply never looks at it.
 TABLES = [
     ("COLLISION", "ULTRAKILL -> Minecraft",
-     "ULTRAKILL collision boxes near the player, already in Minecraft block coords", 4096, [
+     "ULTRAKILL collision boxes near the player and near the points in COLLISION_INTEREST, already in Minecraft block coords", 16384, [
         ("tickTimestamp","i64", "epoch ms when ULTRAKILL sampled the colliders"),
         ("generation","u32", "bumps on every re-anchor; boxes from an older mapping are discarded"),
         ("count","u32", "valid records, <= capacity"),
@@ -183,6 +183,15 @@ TABLES = [
         ("maxX","f32", ""),
         ("maxY","f32", ""),
         ("maxZ","f32", ""),
+     ]),
+    ("COLLISION_INTEREST", "Minecraft -> ULTRAKILL",
+     "where entities other than the player are (clustered), so ULTRAKILL publishes its collision around them too", 128, [
+        ("tickTimestamp","i64", "epoch ms of the client tick"),
+        ("count","u32", "valid records, <= capacity"),
+     ], [
+        ("x","f32", "Minecraft block coords, an entity cluster's centre"),
+        ("y","f32", ""),
+        ("z","f32", ""),
      ]),
     ("GUI", "Minecraft -> ULTRAKILL",
      "every quad Minecraft's GUI draws this frame (HUD, text, items), in draw order, for ULTRAKILL to replay", 32768, [

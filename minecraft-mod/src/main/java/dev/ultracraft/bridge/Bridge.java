@@ -533,6 +533,25 @@ public final class Bridge implements AutoCloseable {
         endWrite(b + Protocol.TBL_GUI_OFF_SEQ);
     }
 
+    /** Write the COLLISION_INTEREST table: {@code count} points, x,y,z each. */
+    public void writeCollisionInterest(long ts, int count, float[] xyz) {
+        if (!connected) return;
+        if (count > Protocol.TBL_COLLISION_INTEREST_CAPACITY) count = Protocol.TBL_COLLISION_INTEREST_CAPACITY;
+        int b = Protocol.TBL_COLLISION_INTEREST_OFFSET;
+        beginWrite(b + Protocol.TBL_COLLISION_INTEREST_OFF_SEQ);
+        buf.putLong(b + Protocol.TBL_COLLISION_INTEREST_OFF_TICKTIMESTAMP, ts);
+        buf.putInt(b + Protocol.TBL_COLLISION_INTEREST_OFF_COUNT, count);
+        int r0 = b + Protocol.TBL_COLLISION_INTEREST_OFF_RECORDS;
+        for (int i = 0; i < count; i++) {
+            int at = r0 + i * Protocol.TBL_COLLISION_INTEREST_RECORD_SIZE;
+            buf.putFloat(at + Protocol.TBL_COLLISION_INTEREST_REC_OFF_X, xyz[i * 3]);
+            buf.putFloat(at + Protocol.TBL_COLLISION_INTEREST_REC_OFF_Y, xyz[i * 3 + 1]);
+            buf.putFloat(at + Protocol.TBL_COLLISION_INTEREST_REC_OFF_Z, xyz[i * 3 + 2]);
+        }
+        java.lang.invoke.VarHandle.releaseFence();
+        endWrite(b + Protocol.TBL_COLLISION_INTEREST_OFF_SEQ);
+    }
+
     /** Write the WORLD_MODELS table under its seqlock; same vertex layout as HAND. */
     public void writeWorldModelsTable(long ts, int count, float[] xyz, float[] uv, int[] rgba, int[] tex) {
         if (!connected) return;

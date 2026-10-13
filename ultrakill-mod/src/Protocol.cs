@@ -7,9 +7,9 @@ namespace UltraCraft.Bridge
     public static class Protocol
     {
         public const uint MAGIC = 0x55544C52u;
-        public const uint VERSION = 1764501406u;   // layout fingerprint
+        public const uint VERSION = 1730610354u;   // layout fingerprint
         public const int HEADER_SIZE = 56;
-        public const int TOTAL_SIZE = 3035640;
+        public const int TOTAL_SIZE = 3332104;
         public const int SEQ_SIZE = 4;
 
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -248,9 +248,9 @@ namespace UltraCraft.Bridge
         public const int STREAM_VTX_OFF_FLAGS = 24;  // u32: bits 0-3 block light, 8-11 sky light, 16 translucent, 17 cutout (neither = solid)
 
         // Tables: one seqlock over a header and a list of fixed-size records.
-        public const int TBL_COLLISION_OFFSET = 12672;  // ULTRAKILL -> Minecraft: ULTRAKILL collision boxes near the player, already in Minecraft block coords
-        public const int TBL_COLLISION_SIZE = 98328;
-        public const int TBL_COLLISION_CAPACITY = 4096;
+        public const int TBL_COLLISION_OFFSET = 12672;  // ULTRAKILL -> Minecraft: ULTRAKILL collision boxes near the player and near the points in COLLISION_INTEREST, already in Minecraft block coords
+        public const int TBL_COLLISION_SIZE = 393240;
+        public const int TBL_COLLISION_CAPACITY = 16384;
         public const int TBL_COLLISION_OFF_SEQ = 0;  // seqlock, odd while writing
         public const int TBL_COLLISION_OFF_TICKTIMESTAMP = 4;  // epoch ms when ULTRAKILL sampled the colliders
         public const int TBL_COLLISION_OFF_GENERATION = 12;  // bumps on every re-anchor; boxes from an older mapping are discarded
@@ -263,7 +263,18 @@ namespace UltraCraft.Bridge
         public const int TBL_COLLISION_REC_OFF_MAXX = 12;
         public const int TBL_COLLISION_REC_OFF_MAXY = 16;
         public const int TBL_COLLISION_REC_OFF_MAXZ = 20;
-        public const int TBL_GUI_OFFSET = 111000;  // Minecraft -> ULTRAKILL: every quad Minecraft's GUI draws this frame (HUD, text, items), in draw order, for ULTRAKILL to replay
+        public const int TBL_COLLISION_INTEREST_OFFSET = 405912;  // Minecraft -> ULTRAKILL: where entities other than the player are (clustered), so ULTRAKILL publishes its collision around them too
+        public const int TBL_COLLISION_INTEREST_SIZE = 1552;
+        public const int TBL_COLLISION_INTEREST_CAPACITY = 128;
+        public const int TBL_COLLISION_INTEREST_OFF_SEQ = 0;  // seqlock, odd while writing
+        public const int TBL_COLLISION_INTEREST_OFF_TICKTIMESTAMP = 4;  // epoch ms of the client tick
+        public const int TBL_COLLISION_INTEREST_OFF_COUNT = 12;  // valid records, <= capacity
+        public const int TBL_COLLISION_INTEREST_OFF_RECORDS = 16;
+        public const int TBL_COLLISION_INTEREST_RECORD_SIZE = 12;
+        public const int TBL_COLLISION_INTEREST_REC_OFF_X = 0;  // Minecraft block coords, an entity cluster's centre
+        public const int TBL_COLLISION_INTEREST_REC_OFF_Y = 4;
+        public const int TBL_COLLISION_INTEREST_REC_OFF_Z = 8;
+        public const int TBL_GUI_OFFSET = 407464;  // Minecraft -> ULTRAKILL: every quad Minecraft's GUI draws this frame (HUD, text, items), in draw order, for ULTRAKILL to replay
         public const int TBL_GUI_SIZE = 786472;
         public const int TBL_GUI_CAPACITY = 32768;
         public const int TBL_GUI_OFF_SEQ = 0;  // seqlock, odd while writing
@@ -282,7 +293,7 @@ namespace UltraCraft.Bridge
         public const int TBL_GUI_REC_OFF_V = 12;
         public const int TBL_GUI_REC_OFF_RGBA = 16;  // colour, r in the low byte
         public const int TBL_GUI_REC_OFF_TEX = 20;  // GUI_TEX_* key
-        public const int TBL_HAND_OFFSET = 897472;  // Minecraft -> ULTRAKILL: Minecraft's first-person hands and held items this frame: posed, lit quads in Minecraft view space (camera looks down -z, y up), far first
+        public const int TBL_HAND_OFFSET = 1193936;  // Minecraft -> ULTRAKILL: Minecraft's first-person hands and held items this frame: posed, lit quads in Minecraft view space (camera looks down -z, y up), far first
         public const int TBL_HAND_SIZE = 229400;
         public const int TBL_HAND_CAPACITY = 8192;
         public const int TBL_HAND_OFF_SEQ = 0;  // seqlock, odd while writing
@@ -298,7 +309,7 @@ namespace UltraCraft.Bridge
         public const int TBL_HAND_REC_OFF_V = 16;
         public const int TBL_HAND_REC_OFF_RGBA = 20;  // colour with lighting applied, r in the low byte
         public const int TBL_HAND_REC_OFF_TEX = 24;  // GUI_TEX_* key
-        public const int TBL_WORLD_MODELS_OFFSET = 1126872;  // Minecraft -> ULTRAKILL: posed model geometry in the world this frame (entities, block entities, the player in third person, block-breaking cracks), unlit, in Minecraft block coords
+        public const int TBL_WORLD_MODELS_OFFSET = 1423336;  // Minecraft -> ULTRAKILL: posed model geometry in the world this frame (entities, block entities, the player in third person, block-breaking cracks), unlit, in Minecraft block coords
         public const int TBL_WORLD_MODELS_SIZE = 1835024;
         public const int TBL_WORLD_MODELS_CAPACITY = 65536;
         public const int TBL_WORLD_MODELS_OFF_SEQ = 0;  // seqlock, odd while writing
@@ -313,7 +324,7 @@ namespace UltraCraft.Bridge
         public const int TBL_WORLD_MODELS_REC_OFF_V = 16;
         public const int TBL_WORLD_MODELS_REC_OFF_RGBA = 20;  // tint, r in the low byte
         public const int TBL_WORLD_MODELS_REC_OFF_TEX = 24;  // GUI_TEX_* key
-        public const int TBL_PARTICLES_OFFSET = 2961896;  // Minecraft -> ULTRAKILL: Minecraft's live block particles (TerrainParticle), interpolated, for ULTRAKILL to draw as billboards
+        public const int TBL_PARTICLES_OFFSET = 3258360;  // Minecraft -> ULTRAKILL: Minecraft's live block particles (TerrainParticle), interpolated, for ULTRAKILL to draw as billboards
         public const int TBL_PARTICLES_SIZE = 73744;
         public const int TBL_PARTICLES_CAPACITY = 2048;
         public const int TBL_PARTICLES_OFF_SEQ = 0;  // seqlock, odd while writing

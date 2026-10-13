@@ -34,10 +34,16 @@ namespace UltraCraft
         private readonly PuppetController _puppet;
         private readonly BepInEx.Logging.ManualLogSource _log;
 
-        private readonly Collider[] _hits = new Collider[1024];
+        private readonly Collider[] _hits = new Collider[4096];
+        private readonly Collider[] _interestHits = new Collider[512];
+        private readonly HashSet<int> _hitIds = new HashSet<int>();
+        private readonly float[] _interestXyz = new float[Protocol.TBL_COLLISION_INTEREST_CAPACITY * 3];
+        private readonly List<Vector3> _interest = new List<Vector3>();
+        /// <summary>Half-size of the query box around each entity cluster, in Minecraft blocks.</summary>
+        private const float InterestRadiusBlocks = 5f;
         private readonly float[] _boxes = new float[Protocol.TBL_COLLISION_CAPACITY * 6];
         private readonly List<KeyValuePair<float, int>> _order = new List<KeyValuePair<float, int>>();
-        private const int MaxCandidates = 1024 + 16384;
+        private const int MaxCandidates = 4096 + 32768;
         private readonly float[] _candidate = new float[MaxCandidates * 6];
         private readonly float[] _lastWritten = new float[Protocol.TBL_COLLISION_CAPACITY * 6];
         private int _lastWrittenCount = -1;
@@ -145,7 +151,14 @@ namespace UltraCraft
 
             // Voxel probing runs every frame, under its own time budget.
             Rigidbody body = _puppet.PlayerBody;
-            _voxels.Tick(_envMask, _puppet.UkToMc(body.position + _puppet.UkFeetOffset));
+            int ni = _bridge.ReadCollisionInterest(_interestXyz);
+            if (ni >= 0)
+            {
+                _interest.Clear();
+                for (int i = 0; i < ni; i++)
+                    _interest.Add(new Vector3(_interestXyz[i * 3], _interestXyz[i * 3 + 1], _interestXyz[i * 3 + 2]));
+            }
+            _voxels.Tick(_envMask, _puppet.UkToMc(body.position + _puppet.UkFeetOffset), _interest);
 
             if (Time.unscaledTime < _next) return;
             _next = Time.unscaledTime + IntervalSeconds;
@@ -161,6 +174,7 @@ namespace UltraCraft
             int n = Physics.OverlapBoxNonAlloc(center, new Vector3(r, r, r), _hits,
                                                Quaternion.identity, _envMask,
                                                QueryTriggerInteraction.Ignore);
+            n = AddInterestHits(n);
 
             // ULTRAKILL feet = rigidbody + feet offset; mapped, this should equal where
             // Minecraft says the player is, which the census line prints as a check.
@@ -268,6 +282,30 @@ namespace UltraCraft
                                  $" -> ({_boxes[3]:F2},{_boxes[4]:F2},{_boxes[5]:F2}); " +
                                  $"player feet mc=({mcPlayer.x:F2},{mcPlayer.y:F2},{mcPlayer.z:F2})");
             }
+        }
+
+        /// <summary>
+        /// Colliders around each entity cluster Minecraft reported (COLLISION_INTEREST), appended
+        /// to the player's hits without duplicates, so mobs, items and minecarts collide with
+        /// ULTRAKILL's level wherever they are, not only next to the player.
+        /// </summary>
+        private int AddInterestHits(int n)
+        {
+            if (_interest.Count == 0) return n;
+            _hitIds.Clear();
+            for (int i = 0; i < n; i++) if (_hits[i] != null) _hitIds.Add(_hits[i].GetInstanceID());
+            foreach (Vector3 mc in _interest)
+            {
+                _puppet.McBoxToUk(mc - Vector3.one * InterestRadiusBlocks, mc + Vector3.one * InterestRadiusBlocks,
+                                  out Vector3 c, out Vector3 half, out Quaternion rot);
+                int k = Physics.OverlapBoxNonAlloc(c, half, _interestHits, rot, _envMask, QueryTriggerInteraction.Ignore);
+                for (int i = 0; i < k && n < _hits.Length; i++)
+                {
+                    Collider col = _interestHits[i];
+                    if (col != null && _hitIds.Add(col.GetInstanceID())) _hits[n++] = col;
+                }
+            }
+            return n;
         }
 
         /// <summary>
