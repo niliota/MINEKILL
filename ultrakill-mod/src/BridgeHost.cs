@@ -77,6 +77,7 @@ namespace Minekill
         private PuppetController _puppet;
         private InputForwarder _input;
         private CollisionPublisher _collision;
+        private CombatBridge _combat;
         private McWorldView _world;
         private HudView _hud;
         private int _focusFrames;
@@ -193,6 +194,9 @@ namespace Minekill
             // After the puppet, so this frame's mapping is the one the boxes are built in.
             if (_collision == null) _collision = new CollisionPublisher(_bridge, _puppet, Log);
             _collision.Tick();
+
+            if (_combat == null) _combat = new CombatBridge(_bridge, _puppet, Log);
+            _combat.Tick();
 
             if (_world == null) _world = new McWorldView(_bridge, _puppet, Log);
             _world.Tick();

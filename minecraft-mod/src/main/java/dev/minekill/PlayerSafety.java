@@ -38,7 +38,7 @@ import org.slf4j.LoggerFactory;
  * fall damage for the drop it did not see. The client is moved too, so the position is
  * right on this very tick.
  */
-final class PlayerSafety {
+public final class PlayerSafety {
 
     private static final Logger LOG = LoggerFactory.getLogger(MinekillClient.MOD_ID);
 
@@ -79,6 +79,14 @@ final class PlayerSafety {
             LOG.info("[MINEKILL] safety: ULTRAKILL not live, released hold");
         }
 
+        Vec3 requested = pendingTeleport;
+        if (requested != null) {
+            pendingTeleport = null;
+            teleport(mc, player, requested, "ULTRAKILL checkpoint respawn");
+            graceUntilMs = System.currentTimeMillis() + FALL_GRACE_MS;
+        }
+        if (System.currentTimeMillis() < graceUntilMs) noFallDamage(mc, player);
+
         // 1. Spawn sync.
         int request = bridge.ukSpawnRequest();
         if (ukAlive && request != 0 && request != handledRequest) {
@@ -97,7 +105,8 @@ final class PlayerSafety {
         boolean haveInput = ukAlive && bridge.readInput(in);
         if (spawnHold && pendingAck == 0 && haveInput && (in.keys & MOVEMENT_KEYS) != 0) {
             spawnHold = false;
-            LOG.info("[MINEKILL] safety: movement key pressed, spawn hold released");
+            graceUntilMs = System.currentTimeMillis() + FALL_GRACE_MS;
+            LOG.info("[MINEKILL] safety: movement key pressed, spawn hold released ({} s invulnerable)", FALL_GRACE_MS / 1000);
         }
 
         // 3. Void net.
@@ -123,8 +132,40 @@ final class PlayerSafety {
                 handledRequest, spawnAck, spawnHold);
     }
 
+    private static volatile Vec3 pendingTeleport;
+
+    /**
+     * After the spawn hold ends (the first movement key) and after a checkpoint teleport, the
+     * player takes no damage at all for a few seconds, so ULTRAKILL's level-start drop plays out
+     * harmlessly (the owner, 2026-10-14). Fall distance is reset too, so landing after the window
+     * does not count the drop.
+     */
+    private static final long FALL_GRACE_MS = 5000;
+    private static volatile long graceUntilMs;
+
+    /** True during the grace window; LivingEntityProxyMixin then refuses all damage to players. */
+    public static boolean inGrace() {
+        return System.currentTimeMillis() < graceUntilMs;
+    }
+
+    private static void noFallDamage(Minecraft mc, LocalPlayer player) {
+        player.resetFallDistance();
+        IntegratedServer server = mc.getSingleplayerServer();
+        if (server == null) return;
+        UUID id = player.getUUID();
+        server.execute(() -> {
+            ServerPlayer sp = server.getPlayerList().getPlayer(id);
+            if (sp != null) sp.resetFallDistance();
+        });
+    }
+
+    /** Move the player on the next tick (ULTRAKILL's checkpoint respawn), from any thread. */
+    static void requestTeleport(Vec3 to) {
+        pendingTeleport = to;
+    }
+
     private static void teleport(Minecraft mc, LocalPlayer player, Vec3 to, String why) {
-        LOG.info("[MINEKILL] safety: teleporting to spawn {} from {}: {}",
+        LOG.info("[MINEKILL] safety: teleporting to {} from {}: {}",
                 fmt(to), fmt(player.position()), why);
         player.snapTo(to.x, to.y, to.z);
         player.setDeltaMovement(Vec3.ZERO);

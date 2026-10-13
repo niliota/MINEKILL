@@ -193,6 +193,20 @@ TABLES = [
         ("y","f32", ""),
         ("z","f32", ""),
      ]),
+    ("ENEMIES", "ULTRAKILL -> Minecraft",
+     "live ULTRAKILL enemies near the player, for Minecraft to mirror as invisible proxy entities it can fight", 128, [
+        ("tickTimestamp","i64", "epoch ms when ULTRAKILL sampled them"),
+        ("generation","u32", "mapping generation (re-anchor); proxies from an older one are removed"),
+        ("count","u32", "valid records, <= capacity"),
+     ], [
+        ("id","i32", "the enemy's instance id, stable while it lives"),
+        ("x","f32", "Minecraft block coords, bottom centre of the enemy's bounds"),
+        ("y","f32", ""),
+        ("z","f32", ""),
+        ("width","f32", "blocks"),
+        ("height","f32", "blocks"),
+        ("health","f32", "ULTRAKILL health (diagnostics)"),
+     ]),
     ("GUI", "Minecraft -> ULTRAKILL",
      "every quad Minecraft's GUI draws this frame (HUD, text, items), in draw order, for ULTRAKILL to replay", 32768, [
         ("tickTimestamp","i64", "epoch ms of the frame"),
@@ -493,9 +507,15 @@ KEY_FLAGS = {
 EVENT_KINDS = {
     "BLOCK_PLACED": 1,
     "BLOCK_BROKEN": 2,
+    # Minecraft hurt an ULTRAKILL enemy's proxy (MC_EVENTS ring): a = enemy id, c = Minecraft damage
+    # (before ULTRAKILL's own multipliers), d = 1 if fire/explosion.
     "ENTITY_ATTACKED": 3,
+    # ULTRAKILL hurt the player (UK_EVENTS ring): a = ULTRAKILL damage (of 100 HP), negative for an
+    # explosion; b = Float.floatToIntBits(x), c = y, d = z: where it came from (Minecraft coords,
+    # x NaN if unknown), so a shield can block it.
     "PLAYER_HURT": 4,
     "LEVEL_LOADED": 5,
+    # Minecraft's player respawned after dying (MC_EVENTS ring): ULTRAKILL restarts its checkpoint.
     "PLAYER_RESPAWN": 6,
     # Keyboard passthrough (UK_EVENTS ring). Minecraft 26.x input is SDL3 (not GLFW): a KeyEvent
     # carries the SDL scancode (key bindings, isEscape: InputConstants.KEY_ESCAPE = 41) AND the SDL
@@ -508,6 +528,9 @@ EVENT_KINDS = {
     # Extra mouse button (UK_EVENTS ring): a = SDL button (2 = middle), b = 1 press / 0 release.
     # Left and right stay in the INPUT slot (attack/use, held state).
     "MOUSE_BUTTON": 9,
+    # Move Minecraft's player (UK_EVENTS ring): a = Float.floatToIntBits(x), c = y, d = z, Minecraft
+    # block coords (the feet). Sent after an ULTRAKILL checkpoint respawn.
+    "TELEPORT": 10,
 }
 
 

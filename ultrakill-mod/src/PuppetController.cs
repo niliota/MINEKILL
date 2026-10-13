@@ -713,12 +713,21 @@ namespace Minekill
         /// held at spawn while this happens, so spawn maps exactly onto that floor. Only the
         /// vertical part changes; with no floor within 3 blocks the capsule measurement stands.
         /// </summary>
+        /// <summary>
+        /// How far below the spawn the floor is looked for. Deliberately short: ULTRAKILL drops its
+        /// player into most levels from above, and that drop must play out. Snapping the feet to
+        /// the floor under it (tried with 64 blocks, 2026-10-14) moved ULTRAKILL's player and broke
+        /// the level start. Minecraft's player falls the drop instead, protected by PlayerSafety's
+        /// grace period.
+        /// </summary>
+        private const float FloorSearchBlocks = 3f;
+
         private void SnapFeetToFloor()
         {
             try
             {
                 Vector3 from = _rb.position + Vector3.up * (0.5f * _scale);
-                float reach = 0.5f * _scale - _ukFeetOffset.y + 3f * _scale;
+                float reach = 0.5f * _scale - _ukFeetOffset.y + FloorSearchBlocks * _scale;
                 if (Physics.Raycast(from, Vector3.down, out RaycastHit hit, reach,
                                     LayerMaskDefaults.Get(LMD.Environment), QueryTriggerInteraction.Ignore))
                 {
@@ -728,7 +737,7 @@ namespace Minekill
                 }
                 else
                 {
-                    _log.LogInfo("puppet: no floor within 3 blocks under spawn; keeping the capsule's feet offset");
+                    _log.LogInfo($"puppet: no floor within {FloorSearchBlocks} blocks under spawn; keeping the capsule's feet offset");
                 }
             }
             catch (Exception e)

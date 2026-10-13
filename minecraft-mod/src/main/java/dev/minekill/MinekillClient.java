@@ -35,6 +35,23 @@ public class MinekillClient implements ClientModInitializer {
     private final dev.minekill.render.ParticleExport particles = new dev.minekill.render.ParticleExport();
     private final dev.minekill.render.WorldModels worldModels = new dev.minekill.render.WorldModels();
     private final CollisionInterest collisionInterest = new CollisionInterest();
+    private final EnemyProxies enemyProxies = new EnemyProxies();
+    private boolean wasDead;
+
+    /**
+     * After a death, the first frame Minecraft's player is alive again (it pressed Respawn):
+     * ULTRAKILL restarts from its checkpoint (combat design: both restart).
+     */
+    private void reportRespawn(net.minecraft.client.Minecraft mc) {
+        if (mc.player == null) return;
+        if (mc.player.isDeadOrDying()) { wasDead = true; return; }
+        if (!wasDead) return;
+        wasDead = false;
+        if (ukLive) {
+            bridge.pushEvent(new dev.minekill.bridge.Bridge.Event(dev.minekill.bridge.Protocol.EV_PLAYER_RESPAWN, 0, 0, 0f, 0f));
+            LOG.info("[MINEKILL] combat: respawned; asking ULTRAKILL to restart its checkpoint");
+        }
+    }
 
     /**
      * Whether Minecraft should behave as if its window were focused.
@@ -188,6 +205,8 @@ public class MinekillClient implements ClientModInitializer {
         if (ukAlive) particles.frame(mc, bridge);
         if (ukAlive) worldModels.frame(mc, bridge);
         if (ukAlive) collisionInterest.frame(mc, bridge);
+        enemyProxies.frame(mc, bridge, ukAlive);
+        reportRespawn(mc);
         if (ukAlive && stream != null && stream.ok()) dev.minekill.gui.GuiTextures.flush(stream);
         if (ukAlive && stream != null && stream.ok() && mc.level != null) dev.minekill.render.AtlasAnimator.INSTANCE.frame(mc, stream);
 
