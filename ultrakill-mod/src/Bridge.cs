@@ -417,6 +417,30 @@ namespace UltraCraft.Bridge
             EndWrite(b + Protocol.TBL_COLLISION_OFF_SEQ);
         }
 
+        /// <summary>
+        /// Read the PARTICLES table under its seqlock into <paramref name="rec"/> (whole records,
+        /// RECORD_SIZE bytes each). Returns the particle count, or -1 if no clean copy was possible.
+        /// </summary>
+        public int ReadParticleTable(byte[] rec)
+        {
+            if (!Connected) return -1;
+            int b = Protocol.TBL_PARTICLES_OFFSET;
+            for (int attempt = 0; attempt < 3; attempt++)
+            {
+                uint s1 = _view.ReadUInt32(b + Protocol.TBL_PARTICLES_OFF_SEQ);
+                if ((s1 & 1) != 0) { Thread.SpinWait(16); continue; }
+                Thread.MemoryBarrier();
+                int count = (int)_view.ReadUInt32(b + Protocol.TBL_PARTICLES_OFF_COUNT);
+                if (count < 0 || count > Protocol.TBL_PARTICLES_CAPACITY) continue;
+                if (count > 0)
+                    _view.ReadArray(b + Protocol.TBL_PARTICLES_OFF_RECORDS, rec, 0, count * Protocol.TBL_PARTICLES_RECORD_SIZE);
+                Thread.MemoryBarrier();
+                if (_view.ReadUInt32(b + Protocol.TBL_PARTICLES_OFF_SEQ) != s1) continue;
+                return count;
+            }
+            return -1;
+        }
+
         public void WriteSlot(int offset, Protocol.SlotInput value)
         {
             WriteSlot(offset, ToBytes(value), Marshal.SizeOf(typeof(Protocol.SlotInput)));

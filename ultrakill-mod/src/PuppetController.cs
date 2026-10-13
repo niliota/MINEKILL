@@ -168,6 +168,9 @@ namespace UltraCraft
 
         public Vector3 UkFeetOffset => _ukFeetOffset;
 
+        /// <summary>ULTRAKILL's player camera (the one placed at Minecraft's eye), or null.</summary>
+        public Camera UkCamera => _camera != null ? _camera.cam : null;
+
         private uint _generation;
 
         // Spawn sync: before anchoring, ask Minecraft to move its player to its fixed spawn
@@ -456,6 +459,7 @@ namespace UltraCraft
                 _ready = false;
                 _anchored = false;
                 _awaitingSpawn = false;
+                _ukBasisCached = false;
                 _sawCameraLateUpdate = false;
                 _searches = 0;
                 return;
@@ -815,6 +819,11 @@ namespace UltraCraft
             _mcOrigin = new Vector3(p.posX, p.posY, p.posZ);
             _ukFeetOffset = MeasureFeetOffset();
             _generation++;
+            // Every anchor samples its own bases (after ApplyLook turns the camera to the new
+            // anchor heading). Keeping a previous level's cache was the latent half of the
+            // 2026-10-13 "diagonal world": one bad sample poisoned every later level.
+            _ukBasisCached = false;
+            _invalidBasisFrames = 0;
             _mcYawOrigin = p.yaw;
             _mcPitchOrigin = p.pitch;
 
@@ -976,7 +985,12 @@ namespace UltraCraft
             }
             catch (Exception e)
             {
-                _log.LogWarning($"puppet: ApplyRotations failed: {e.Message}");
+                if (_applyFailures++ % 600 == 0)
+                    _log.LogWarning($"puppet: ApplyRotations failed (x{_applyFailures}): {e.GetType().Name}: {e.Message}; " +
+                                    $"cc.player null={_camera.player == null}, NewMovement.Instance null=" +
+                                    $"{MonoSingleton<NewMovement>.Instance == null}, its rb null=" +
+                                    $"{MonoSingleton<NewMovement>.Instance == null || MonoSingleton<NewMovement>.Instance.rb == null}, " +
+                                    $"same NewMovement as ours={MonoSingleton<NewMovement>.Instance == _movement}");
             }
         }
 
@@ -1113,6 +1127,8 @@ namespace UltraCraft
         private Vector3 _cachedMcRight = new Vector3(1f, 0f, 0f);
 
         private bool _ukBasisCached;
+        private int _invalidBasisFrames;
+        private int _applyFailures;
 
         /// <summary>
         /// Whether the cached basis was sampled from a camera genuinely pointing at the
@@ -1187,22 +1203,36 @@ namespace UltraCraft
         {
             Vector3 f = UkForwardLive();
             Vector3 r = UkRightLive();
-            if (f.sqrMagnitude > 1e-6f) _cachedUkForward = f;
-            if (r.sqrMagnitude > 1e-6f) _cachedUkRight = r;
-
-            _cachedMcForward = McForward(_mcYawOrigin);
-            _cachedMcRight = McRight(_mcYawOrigin);
-
-            _ukBasisCached = true;
 
             // Did we sample from a camera that was actually pointing where we think?
             // Compare the sampled forward against the heading the camera should now have.
-            // If this is NO the cache is stale and WASD will be rotated by the difference,
-            // which is exactly the bug this ordering fix exists to prevent.
+            //
+            // An invalid sample is NEVER stored (2026-10-13). It used to be cached anyway and
+            // only logged: in a scene where ULTRAKILL's own ApplyRotations throws, the camera
+            // never turned, the default +Z was cached 67.5 degrees off, and because the cache
+            // was also never reset, the whole session's map was rotated by that much: a
+            // "diagonal" world, collision boxes in the wrong place, falling through floors.
+            // Now: retry every frame; MappingReady (collision, world drawing) stays false.
             Vector3 expected = new Vector3(
                 Mathf.Sin(_ukYawAnchor * Mathf.Deg2Rad), 0f,
                 Mathf.Cos(_ukYawAnchor * Mathf.Deg2Rad));
-            _basisValidAtSample = Vector3.Angle(f, expected) < 1f;
+            float off = Vector3.Angle(f, expected);
+            _basisValidAtSample = off < 1f;
+            if (!_basisValidAtSample)
+            {
+                if (_invalidBasisFrames++ % 600 == 0)
+                    _log.LogWarning($"puppet: NOT caching bases: camera is {off:F1} deg away from the anchor " +
+                                    "heading (ULTRAKILL's camera not following yet?). Collision and blocks stay " +
+                                    "off until it is; retrying every frame.");
+                return;
+            }
+            _invalidBasisFrames = 0;
+
+            if (f.sqrMagnitude > 1e-6f) _cachedUkForward = f;
+            if (r.sqrMagnitude > 1e-6f) _cachedUkRight = r;
+            _cachedMcForward = McForward(_mcYawOrigin);
+            _cachedMcRight = McRight(_mcYawOrigin);
+            _ukBasisCached = true;
 
             _log.LogInfo(
                 $"puppet: cached bases at anchor (mc yaw {_mcYawOrigin:F2}, " +

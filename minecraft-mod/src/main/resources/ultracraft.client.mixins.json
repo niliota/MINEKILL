@@ -12,7 +12,11 @@
     "TextureAtlasAccessor",
     "SpriteContentsAccessor",
     "PlayerEdgeMixin",
-    "EntityPickMixin"
+    "EntityPickMixin",
+    "ParticleEngineAccessor",
+    "ParticleGroupAccessor",
+    "ParticleAccessor",
+    "SingleQuadParticleAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -28,11 +28,32 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * {@code ServerPlayer} (integrated server) are {@link Player}s, so the server agrees with
  * the client about where the walls are. Mobs come later, deliberately.
  *
- * <p>The {@code CollisionContext} overload of the same method is not patched yet; player
- * movement does not use it.
+ * <p>The {@code CollisionContext} overload is patched too (below), for particles.
  */
 @Mixin(Entity.class)
 public abstract class EntityCollisionMixin {
+
+    /**
+     * The other overload, taking a CollisionContext instead of an Entity. Particles collide
+     * through it ({@code Particle.move} -> {@code Entity.collideBoundingBox(CollisionContext, ...)},
+     * verified in the 26.3 bytecode), so without this, block debris fell through ULTRAKILL floors.
+     * Everything that uses this path gets ULTRAKILL collision.
+     */
+    @Inject(
+            method = "collectCollidersIgnoringWorldBorder(Lnet/minecraft/world/phys/shapes/CollisionContext;"
+                    + "Lnet/minecraft/world/level/Level;Ljava/util/List;"
+                    + "Lnet/minecraft/world/phys/AABB;)Ljava/util/List;",
+            at = @At("RETURN"),
+            cancellable = true)
+    private static void ultracraft$addUltrakillShapesContext(net.minecraft.world.phys.shapes.CollisionContext context,
+                                                             Level level, List<VoxelShape> entityColliders, AABB box,
+                                                             CallbackInfoReturnable<List<VoxelShape>> cir) {
+        if (!UkCollision.hasShapes()) return;
+        List<VoxelShape> original = cir.getReturnValue();
+        List<VoxelShape> merged = new ArrayList<>(original.size() + 8);
+        merged.addAll(original);
+        if (UkCollision.appendShapes(box, merged) > 0) cir.setReturnValue(merged);
+    }
 
     @Inject(
             method = "collectCollidersIgnoringWorldBorder(Lnet/minecraft/world/entity/Entity;"
