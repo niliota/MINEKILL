@@ -2312,3 +2312,27 @@ User confirmed: F5 (both views, camera clipping), third-person body with transpa
   Minecraft's player is held at spawn meanwhile, so spawn maps onto that floor every time.
 
 User confirmed: F3 (and combinations), middle click, and blocks staying put across level resets.
+
+### Entities, block entities; red water; fire
+
+User: ground shift not fixed after all (and slipping through ULTRAKILL floors seems likelier when
+it happens) - back burner until they can characterise it. Requests: chests/beds, fire, red water,
+all of Minecraft's mobs and entities.
+- **Entities:** WorldModels extracts and submits every entity within 64 blocks
+  (`entitiesForRendering`, `extractEntity`, `submit` at its world position) into ModelCollector,
+  rather than taking Minecraft's frame (Minecraft culls to its narrower view). The local player
+  still only in third person. ModelCollector now also takes `submitBlockModel` (falling blocks,
+  TNT, minecart contents). WORLD_MODELS capacity 16384 -> 65536 vertices.
+- **Block entities:** chests, beds, signs, banners, ... via `BlockEntityRenderDispatcher
+  .tryExtractRenderState` (+ the globally-rendered variant for beacons) and `submit`, for the
+  block entities of the chunks within 4 of the player. Their textures live in other atlases
+  (chest, bed, sign, ...); `GuiTextures.keyForLocation` now mirrors any TextureAtlas through
+  AtlasExport (now public, `rgba()`), after mapping the fixed GUI/block/item keys first.
+- **Red water:** the translucent template ('Mulch') carries VERTEX_BLENDING, kept because the
+  keyword filter kept anything containing "BLEND". It reads vertex colours as masks for a second
+  texture; dropped.
+- **Fire (and other cut-out blocks):** the cut-out layer defaulted to Unlit/Texture, which has
+  no alpha. The alpha-tested ULTRAKILL material used for models is now a cut-out candidate and
+  the default (F10 still cycles); particles use it too.
+
+User confirmed: mobs, items, tridents, arrows, chests and beds render; water blue; fire correct (static); grass, glass and water transparency fine; performance fine. Open: chests/beds in the hotbar, animated textures, entity collision with ULTRAKILL geometry.

@@ -216,7 +216,7 @@ TABLES = [
         ("tex","u32", "GUI_TEX_* key"),
      ]),
     ("WORLD_MODELS", "Minecraft -> ULTRAKILL",
-     "posed model geometry in the world this frame (the player in third person, block-breaking cracks), unlit, in Minecraft block coords", 16384, [
+     "posed model geometry in the world this frame (entities, block entities, the player in third person, block-breaking cracks), unlit, in Minecraft block coords", 65536, [
         ("tickTimestamp","i64", "epoch ms of the frame"),
         ("count","u32", "valid vertices; 4 per quad, counter-clockwise front as in Minecraft"),
      ], [

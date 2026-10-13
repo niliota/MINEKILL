@@ -20,7 +20,7 @@ import net.minecraft.data.AtlasIds;
  * Nothing is shipped with the mod. Approach after SkyCraft's SkyAtlas (MIT,
  * github.com/chasmlol/SkyCraft), reduced to the block atlas.
  */
-final class AtlasExport {
+public final class AtlasExport {
     final int width, height;
     final ByteBuffer pixels;
     /** Identity of the sprite list: a resource reload replaces it, which makes this copy stale. */
@@ -38,6 +38,16 @@ final class AtlasExport {
 
     /** The atlas this was built from (blocks, items or gui). */
     private net.minecraft.resources.Identifier atlasId = AtlasIds.BLOCKS;
+
+    /** Any loaded atlas (chests, beds, signs, shulker boxes, ...) as RGBA bytes, row-major. */
+    public static byte[] rgba(TextureAtlas atlas, int[] sizeOut) {
+        AtlasExport e = new AtlasExport(atlas);
+        byte[] out = new byte[e.width * e.height * 4];
+        e.pixels.duplicate().clear().get(out);
+        sizeOut[0] = e.width;
+        sizeOut[1] = e.height;
+        return out;
+    }
 
     static AtlasExport build(Minecraft mc) {
         return build(mc, AtlasIds.BLOCKS);

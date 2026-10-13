@@ -55,7 +55,8 @@ namespace UltraCraft
         /// Translucent: the Master transparent clone (F11 option 1). Null = first candidate.
         /// F9/F10/F11 still cycle at runtime, for comparing in new levels.
         /// </summary>
-        private static readonly string[] PreferredDefault = { null, "Unlit/Texture", null };
+        private const string AlphaTestedName = "ULTRAKILL/Master alpha-tested";
+        private static readonly string[] PreferredDefault = { null, AlphaTestedName, null };
 
         private readonly BridgeTransport _bridge;
         private readonly PuppetController _puppet;
@@ -492,7 +493,7 @@ namespace UltraCraft
             _particleMesh.RecalculateNormals();
             _particleMesh.RecalculateBounds();
             var mr = _particles.GetComponent<MeshRenderer>();
-            Material m = _litCutout != null ? _litCutout : _mats[Cutout] != null ? _mats[Cutout] : _fallback;
+            Material m = _particleMat != null ? _particleMat : _litCutout != null ? _litCutout : _mats[Cutout] != null ? _mats[Cutout] : _fallback;
             if (mr.sharedMaterial != m) mr.sharedMaterial = m;
             if (!_particles.activeSelf) _particles.SetActive(true);
         }
@@ -573,6 +574,7 @@ namespace UltraCraft
         }
 
         private Material _modelTemplate;
+        private Material _particleMat;   // alpha-tested, lit, block atlas
 
         /// <summary>
         /// The material entity models (skins with transparent outer layers) are drawn with. The
@@ -602,6 +604,8 @@ namespace UltraCraft
             if (m2.HasProperty("_Color")) m2.SetColor("_Color", Color.white);
             _modelTemplate = m2;
             _modelMats.Clear();
+            _particleMat = new Material(m2) { hideFlags = HideFlags.HideAndDontSave, name = "UltraCraft.Particles" };
+            SetAtlas(_particleMat);
             _log.LogInfo($"world: model material from '{t.name}' ({Signature(t)}); keywords [{string.Join(" ", m2.shaderKeywords)}]");
         }
 
@@ -744,6 +748,14 @@ namespace UltraCraft
                         _candidates[l].Add(m);
                     }
                     if (l == Cutout) AddVertexLitCutout(opaque, cutout);
+                    if (l == Cutout && _modelTemplate != null)
+                    {
+                        // The alpha-tested, ULTRAKILL-lit material the entity models use: cut-out
+                        // blocks (fire, flowers, grass overlays) need a real alpha test too.
+                        var mc = new Material(_modelTemplate) { hideFlags = HideFlags.HideAndDontSave, name = AlphaTestedName };
+                        SetAtlas(mc);
+                        _candidates[l].Add(mc);
+                    }
                     int preferred = PreferredDefault[l] == null ? -1 : _candidates[l].FindIndex(m => m.name == PreferredDefault[l]);
                     _choice[l] = preferred >= 0 ? preferred : 0;
                     ApplyChoice(l);
@@ -768,10 +780,12 @@ namespace UltraCraft
             var m = new Material(template) { hideFlags = HideFlags.HideAndDontSave, name = $"{MasterShader} clone of '{template.name}'" };
             // Keep blend/cutout/depth keywords and the look (fog, vertex lighting); drop the
             // level-specific effects (rain, caustics, emissive albedo, scrolling, ...).
+            // VERTEX_BLENDING is not a blend mode: it reads vertex colours as masks for a second
+            // texture, which turned Minecraft's blue water tint red.
             foreach (string k in m.shaderKeywords)
             {
                 bool keep = k == "VERTEX_LIGHTING" || k == "_VERTEXLIGHTING_ON" || k == "_FOG_ON" || k == "_GLITCHMODE_NONE"
-                         || k.Contains("BLEND") || k.Contains("ALPHA") || k.Contains("CUTOUT") || k.Contains("CLIP")
+                         || (k.Contains("BLEND") && k != "VERTEX_BLENDING") || k.Contains("ALPHA") || k.Contains("CUTOUT") || k.Contains("CLIP")
                          || k.Contains("TRANSP") || k.Contains("ZWRITE") || k.Contains("CULL") || k.Contains("SURFACE");
                 if (!keep) m.DisableKeyword(k);
             }

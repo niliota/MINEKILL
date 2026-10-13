@@ -20,8 +20,14 @@ import org.joml.Vector3f;
 import org.slf4j.LoggerFactory;
 
 /**
- * Model geometry that lives in the world, for ULTRAKILL to draw lit by its own scene: the
- * player's body while Minecraft's camera is in third person (F5), and the block-breaking cracks.
+ * Model geometry that lives in the world, for ULTRAKILL to draw lit by its own scene: every
+ * entity near the player (mobs, dropped items, arrows, item frames, ...; the player's own body
+ * only in third person), block entities (chests, beds, signs, banners, ...), and the
+ * block-breaking cracks.
+ *
+ * <p>Entities and block entities go through Minecraft's own renderers, extracted here for
+ * ULTRAKILL's sake rather than taken from Minecraft's frame: Minecraft culls to its own narrower
+ * view, ULTRAKILL's camera sees wider. Everything within {@link #RANGE} blocks is drawn.
  *
  * <p>The player goes through Minecraft's own entity renderer (extractEntity, then submit at its
  * world position) into a ModelCollector, so armour, held items, skin layers and every animation
@@ -33,6 +39,8 @@ import org.slf4j.LoggerFactory;
 public final class WorldModels {
     private static final Vector3f NONE = new Vector3f();
     private static final float CRACK_LIFT = 0.002f;
+    private static final double RANGE = 64.0;
+    private static final int CHUNK_RANGE = 4;   // block entities: chunks around the player's
 
     /** The breaking blocks Minecraft drew this frame (LevelRendererMixin). */
     private static volatile List<BlockBreakingRenderState> breaking = List.of();
@@ -45,6 +53,7 @@ public final class WorldModels {
     private final List<BlockStateModelPart> parts = new ArrayList<>();
     private int n;
     private boolean playerFailureLogged, crackFailureLogged, wasThirdPerson;
+    private final java.util.Set<Class<?>> failedTypes = new java.util.HashSet<>();
 
     public static void setBreaking(List<BlockBreakingRenderState> states) {
         breaking = states.isEmpty() ? List.of() : List.copyOf(states);
@@ -56,6 +65,8 @@ public final class WorldModels {
             boolean third = !mc.options.getCameraType().isFirstPerson();
             if (third) player(mc, !wasThirdPerson);
             wasThirdPerson = third;
+            entities(mc);
+            blockEntities(mc);
             for (BlockBreakingRenderState s : breaking) crack(mc, s);
         }
         bridge.writeWorldModelsTable(System.currentTimeMillis(), n, xyz, uv, rgba, tex);
@@ -80,6 +91,60 @@ public final class WorldModels {
                 playerFailureLogged = true;
                 LoggerFactory.getLogger("ultracraft").warn("[UltraCraft] world models: player capture failed: {}", e.toString());
             }
+        }
+    }
+
+    /** Every entity within range except the local player (drawn by player() in third person). */
+    private void entities(Minecraft mc) {
+        float pt = mc.getDeltaTracker().getGameTimeDeltaPartialTick(true);
+        var dispatcher = mc.getEntityRenderDispatcher();
+        var camera = new CameraRenderState();
+        collector.begin(new Matrix4f(), NONE, NONE, false);
+        for (var e : mc.level.entitiesForRendering()) {
+            if (e == mc.player || e.distanceToSqr(mc.player) > RANGE * RANGE) continue;
+            try {
+                var state = dispatcher.extractEntity(e, pt);
+                dispatcher.submit(state, camera, state.x, state.y, state.z, new PoseStack(), collector);
+            } catch (RuntimeException ex) {
+                logOnce(e.getClass(), "entity", ex);
+            }
+        }
+        for (ModelCollector.Quad q : collector.quads()) put(q.x, q.y, q.z, q.u, q.v, q.rgba, q.tex);
+    }
+
+    /** Block entities in the chunks around the player, through Minecraft's block entity renderers. */
+    private void blockEntities(Minecraft mc) {
+        float pt = mc.getDeltaTracker().getGameTimeDeltaPartialTick(true);
+        var dispatcher = mc.getBlockEntityRenderDispatcher();
+        var camera = new CameraRenderState();
+        int pcx = mc.player.blockPosition().getX() >> 4, pcz = mc.player.blockPosition().getZ() >> 4;
+        collector.begin(new Matrix4f(), NONE, NONE, false);
+        for (int cx = pcx - CHUNK_RANGE; cx <= pcx + CHUNK_RANGE; cx++) {
+            for (int cz = pcz - CHUNK_RANGE; cz <= pcz + CHUNK_RANGE; cz++) {
+                var chunk = mc.level.getChunkSource().getChunk(cx, cz, false);
+                if (chunk == null) continue;
+                for (var be : chunk.getBlockEntities().values()) {
+                    try {
+                        // Off-screen renderers (beacons) answer only to the "globally rendered" call.
+                        var state = dispatcher.tryExtractRenderState(be, pt, null, false);
+                        if (state == null) state = dispatcher.tryExtractRenderState(be, pt, null, true);
+                        if (state == null) continue;
+                        var pos = be.getBlockPos();
+                        PoseStack pose = new PoseStack();
+                        pose.translate(pos.getX(), pos.getY(), pos.getZ());
+                        dispatcher.submit(state, pose, collector, camera);
+                    } catch (RuntimeException ex) {
+                        logOnce(be.getClass(), "block entity", ex);
+                    }
+                }
+            }
+        }
+        for (ModelCollector.Quad q : collector.quads()) put(q.x, q.y, q.z, q.u, q.v, q.rgba, q.tex);
+    }
+
+    private void logOnce(Class<?> type, String what, RuntimeException e) {
+        if (failedTypes.add(type)) {
+            LoggerFactory.getLogger("ultracraft").warn("[UltraCraft] world models: {} {} failed: {}", what, type.getSimpleName(), e.toString());
         }
     }
 

@@ -54,13 +54,8 @@ public final class GuiTextures {
 
     private GuiTextures() {}
 
-    /** The key for a texture view, or -1 for one ULTRAKILL cannot have (quads with it are skipped). */
-    public static synchronized int key(Minecraft mc, GpuTextureView view) {
-        if (view == null) return Protocol.GUI_TEX_NONE;
-        GpuTexture t = view.texture();
-        // The atlases' GPU textures only exist once resources have loaded; asking earlier throws
-        // "Texture does not exist" (crashed the 2026-10-13 build at the first loading screen).
-        // Until then, map nothing and try again next frame.
+    /** Map the GUI, block and item atlases to their fixed keys; false while they do not exist yet. */
+    private static boolean ensureAtlasKeys(Minecraft mc) {
         try {
             Object identity = mc.getAtlasManager().getAtlasOrThrow(AtlasIds.GUI).getTexture();
             if (identity != atlasIdentity) {                 // first time, or a resource reload
@@ -70,9 +65,20 @@ public final class GuiTextures {
                 KEYS.put(mc.getAtlasManager().getAtlasOrThrow(AtlasIds.ITEMS).getTexture(), Protocol.GUI_TEX_ITEMS);
                 atlasIdentity = identity;
             }
+            return true;
         } catch (RuntimeException notReady) {
-            return -1;
+            return false;
         }
+    }
+
+    /** The key for a texture view, or -1 for one ULTRAKILL cannot have (quads with it are skipped). */
+    public static synchronized int key(Minecraft mc, GpuTextureView view) {
+        if (view == null) return Protocol.GUI_TEX_NONE;
+        GpuTexture t = view.texture();
+        // The atlases' GPU textures only exist once resources have loaded; asking earlier throws
+        // "Texture does not exist" (crashed the 2026-10-13 build at the first loading screen).
+        // Until then, map nothing and try again next frame.
+        if (!ensureAtlasKeys(mc)) return -1;
         Integer k = KEYS.get(t);
         if (k != null) return k;
         Mirror m = MIRRORS.get(t);
@@ -99,8 +105,22 @@ public final class GuiTextures {
         } catch (RuntimeException notReady) {
             return -1;
         }
+        if (!ensureAtlasKeys(mc)) return -1;
+        Integer fixed = KEYS.get(t);
+        if (fixed != null) return fixed;
         Mirror m = MIRRORS.get(t);
         if (m != null) return m.key;
+        // Other atlases (chests, beds, signs, banners, shulker boxes): rebuilt on the CPU from
+        // their sprites, like the block atlas. Keyed by the GPU texture, so a reload re-mirrors.
+        if (abs instanceof net.minecraft.client.renderer.texture.TextureAtlas atlas) {
+            int[] size = new int[2];
+            byte[] px = dev.ultracraft.render.AtlasExport.rgba(atlas, size);
+            m = new Mirror(nextKey++, size[0], size[1]);
+            System.arraycopy(px, 0, m.rgba, 0, px.length);
+            MIRRORS.put(t, m);
+            LOG.info("[UltraCraft] gui: mirrored atlas '{}' ({}x{})", id, m.w, m.h);
+            return m.key;
+        }
         // Downloaded skins are DynamicTextures that keep their pixels on the CPU.
         if (abs instanceof net.minecraft.client.renderer.texture.DynamicTexture dyn && dyn.getPixels() != null) {
             m = mirrorImage(t, dyn.getPixels());
