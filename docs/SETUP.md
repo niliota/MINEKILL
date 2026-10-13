@@ -32,7 +32,7 @@ Recorded 2026-10-08 so a future session does not have to rediscover it.
 
 - Managed by **FreesmLauncher**, instance name `UltraCraft`.
 - Instance at `UltraCraft/` (canonical), launched from FreesmLauncher.
-  `/home/ash/Games/Minecraft/Instances/UltraCraft` is a symlink to it.
+  `~/Games/Minecraft/Instances/UltraCraft` is a symlink to it.
 - **Minecraft 26.3**, **Fabric Loader 0.19.5**, mixinextras 0.5.5, Java 25.
 - Runs natively on Linux: LWJGL 3.4.3, OpenGL 4.6 via Mesa 26.2.2.
 - Real assets are present as loose objects under

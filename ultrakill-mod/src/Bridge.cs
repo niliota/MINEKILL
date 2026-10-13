@@ -39,9 +39,9 @@ namespace UltraCraft.Bridge
         ///
         ///   - walking up the working directory looking for a "home" segment fails
         ///     when the game runs through a different drive mapping (one prefix on
-        ///     this machine maps s: to /home, so the path reads S:\ash\... and there
+        ///     this machine maps s: to /home, so the path reads S:\<user>\... and there
         ///     is no "home" segment anywhere in it);
-        ///   - USERPROFILE (C:\users\ash) is a real directory inside the prefix, NOT
+        ///   - USERPROFILE (C:\users\<user>) is a real directory inside the prefix, NOT
         ///     the Linux home;
         ///   - USERPROFILE\Documents is a symlink to the Linux home in some prefixes
         ///     and a plain directory in others.
@@ -462,6 +462,27 @@ namespace UltraCraft.Bridge
                 _view.ReadArray(b, dst, 0, bytes);
                 Thread.MemoryBarrier();
                 if (_view.ReadUInt32(b + Protocol.TBL_GUI_OFF_SEQ) == s1) return count;
+            }
+            return -1;
+        }
+
+        /// <summary>Copy the HAND table (header + records) into dst under its seqlock; returns the vertex count or -1.</summary>
+        public int ReadHandTable(byte[] dst)
+        {
+            if (!Connected) return -1;
+            int b = Protocol.TBL_HAND_OFFSET;
+            for (int attempt = 0; attempt < 3; attempt++)
+            {
+                uint s1 = _view.ReadUInt32(b + Protocol.TBL_HAND_OFF_SEQ);
+                if ((s1 & 1) != 0) { Thread.SpinWait(16); continue; }
+                Thread.MemoryBarrier();
+                int count = (int)_view.ReadUInt32(b + Protocol.TBL_HAND_OFF_COUNT);
+                if (count < 0 || count > Protocol.TBL_HAND_CAPACITY) continue;
+                int bytes = Protocol.TBL_HAND_OFF_RECORDS + count * Protocol.TBL_HAND_RECORD_SIZE;
+                if (dst.Length < bytes) return -1;
+                _view.ReadArray(b, dst, 0, bytes);
+                Thread.MemoryBarrier();
+                if (_view.ReadUInt32(b + Protocol.TBL_HAND_OFF_SEQ) == s1) return count;
             }
             return -1;
         }

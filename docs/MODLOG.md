@@ -189,8 +189,8 @@ Linux home, resolved *inside Wine*. Three mechanisms had been tried and all thre
 because the answer depends on how the prefix was built:
 
 - walking up the working directory looking for a `home` segment — this user's prefix maps
-  `s:` to `/home`, so the game's working directory read `S:\ash\...` with no `home` in it;
-- `USERPROFILE` (`C:\users\ash`) is a real directory inside the prefix, not the Linux home;
+  `s:` to `/home`, so the game's working directory read `S:\<user>\...` with no `home` in it;
+- `USERPROFILE` (`C:\users\<user>`) is a real directory inside the prefix, not the Linux home;
 - `USERPROFILE\Documents` is a symlink to the Linux home in one prefix and a plain directory
   in the other.
 
@@ -482,7 +482,7 @@ default must never be used for a shared file.
 `~/.ultracraft/ultracraft.bridge`. `ULTRACRAFT_BRIDGE` remains as an override but is no longer
 needed. Verified with zero configuration:
 
-    [Info   :UltraCraft] bridge open at Z:\home\ash\.ultracraft\ultracraft.bridge (pid 640, ...)
+    [Info   :UltraCraft] bridge open at Z:\home\<user>\.ultracraft\ultracraft.bridge (pid 640, ...)
 
     mc pid    = 134037
     uk pid    = 640
@@ -497,13 +497,13 @@ both wrong.** Measured, not assumed:
 
 1. `HOME` is **null**. Wine replaces the Unix `HOME` with `USERPROFILE`, so
    `Environment.GetEnvironmentVariable("HOME")` returns nothing.
-2. `USERPROFILE` (`C:\users\ash`) is a **real directory on the prefix's tmpfs**, not the Linux
+2. `USERPROFILE` (`C:\users\<user>`) is a **real directory on the prefix's tmpfs**, not the Linux
    home, so paths under it do not coincide with what a native Linux process sees. `readlink -f`
    on it resolves to itself, and the filesystem differs (`tmpfs` vs `ext4`).
 3. What works: Wine maps `Z:` to the Linux root, and the game runs from somewhere under the
    Linux home. So the Linux home is found by walking up the working directory to the segment
    following `home`. The fallback is `USERPROFILE\Documents`, which Wine *does* symlink to the
-   Linux home (`Documents -> /home/ash/Documents`).
+   Linux home (`Documents -> ~/Documents`).
 
 **Unity's logger is the wrong logger here.** Messages written with `UnityEngine.Debug.Log` only
 reach `LogOutput.log` when `[Logging.Disk] WriteUnityLog = true`, which ships false. The plugin
@@ -517,7 +517,7 @@ side's view of the bridge. It is also what revealed the main-loop hang above.
 
 - **ULTRAKILL hangs under bare Wine** shortly after level preload. Blocks everything downstream.
 - The Minecraft instance in the project folder is a stale duplicate of
-  `/home/ash/Games/Minecraft/Instances/UltraCraft`. The plan was to symlink the Games path to the
+  `~/Games/Minecraft/Instances/UltraCraft`. The plan was to symlink the Games path to the
   project copy; not done, because Minecraft was running.---
 
 ## 2026-10-08 — The input bug: a constant that was not noise
@@ -2205,3 +2205,33 @@ neither game was in a world. Causes and fixes:
 
 User confirmed: Backspace/editing keys work, inventory and menu backgrounds render, the whole GUI
 is replayed correctly, and ULTRAKILL's view is intact. Temporary key and screen diagnostics removed.
+
+### H lock removed; first-person hands; the inventory's player model
+
+- **H lock removed** (user: no use for it). Spawn sync and the void net stay; `KEY_HOLD_TOGGLE`
+  (bit 7) is retired.
+- **ModelCollector** (render/): a SubmitNodeCollector that keeps submitted entity models, model
+  parts and item models as posed, lit, textured quads. Models are built on the spot as
+  ModelFeatureRenderer would (setupAnim, renderToBuffer through the UvMapping). Model textures come
+  from the RenderType's Sampler0 location (accessors on RenderType.state / RenderSetup.textures),
+  mirrored via `GuiTextures.keyForLocation`: resource PNGs (default skins, armour) or, for
+  downloaded skins, the DynamicTexture's CPU pixels.
+- **Hands:** after `FirstPersonHandsAndItemsRenderer.submitHandsWithItems`, the same call is
+  replayed into a ModelCollector whose post-transform is the camera's view rotation (the pose stack
+  carries its inverse), so quads arrive in view space, lit with the world lights and the light
+  level. New bridge table HAND (8192 vertices: x,y,z,u,v,rgba,tex + hud FOV), written at every
+  return of `GameRenderer.renderItemInHand` (empty when Minecraft draws no hands). ULTRAKILL draws
+  it in OnGUI before the GUI, with Minecraft's hand projection and UI/Default at ZTest Always.
+- **Inventory player:** PictureInPictureRenderer.prepare HEAD, for a GuiEntityRenderState, rebuilds
+  the PiP pose in GUI pixels (box centre, scale(s,s,-s), translation, rotation, camera override)
+  and submits the entity into a ModelCollector; the quads replace the PiP blit when GuiCapture
+  reaches it (matched by position, like items).
+
+User confirmed: hand and inventory player model render; the inventory model has no issues. Held
+items did: flat (generated) items appeared doubled and blocks showed one side inside out. Cause:
+painter's order by average depth fails up close in perspective (a block's side sorts in front of
+its face; a flat item's back face covers its front), and the hand quads were not culled. Fix:
+hand quads now drop back faces (counter-clockwise front, as GL culls) and sort by distance from
+the eye. Also removed the local username from docs and comments.
+
+User confirmed: held items render correctly; H lock removal, hands and the inventory player model all good.

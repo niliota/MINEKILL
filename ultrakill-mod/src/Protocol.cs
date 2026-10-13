@@ -9,7 +9,7 @@ namespace UltraCraft.Bridge
         public const uint MAGIC = 0x55544C52u;
         public const uint VERSION = 1u;
         public const int HEADER_SIZE = 56;
-        public const int TOTAL_SIZE = 971208;
+        public const int TOTAL_SIZE = 1200608;
         public const int SEQ_SIZE = 4;
 
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -279,7 +279,23 @@ namespace UltraCraft.Bridge
         public const int TBL_GUI_REC_OFF_V = 12;
         public const int TBL_GUI_REC_OFF_RGBA = 16;  // colour, r in the low byte
         public const int TBL_GUI_REC_OFF_TEX = 20;  // GUI_TEX_* key
-        public const int TBL_PARTICLES_OFFSET = 897464;  // Minecraft -> ULTRAKILL: Minecraft's live block particles (TerrainParticle), interpolated, for ULTRAKILL to draw as billboards
+        public const int TBL_HAND_OFFSET = 897464;  // Minecraft -> ULTRAKILL: Minecraft's first-person hands and held items this frame: posed, lit quads in Minecraft view space (camera looks down -z, y up), far first
+        public const int TBL_HAND_SIZE = 229400;
+        public const int TBL_HAND_CAPACITY = 8192;
+        public const int TBL_HAND_OFF_SEQ = 0;  // seqlock, odd while writing
+        public const int TBL_HAND_OFF_TICKTIMESTAMP = 4;  // epoch ms of the frame
+        public const int TBL_HAND_OFF_COUNT = 12;  // valid vertices; 4 per quad
+        public const int TBL_HAND_OFF_FOV = 16;  // Minecraft's hand field of view, vertical degrees (it draws hands with their own projection)
+        public const int TBL_HAND_OFF_RECORDS = 24;
+        public const int TBL_HAND_RECORD_SIZE = 28;
+        public const int TBL_HAND_REC_OFF_X = 0;  // Minecraft view space, blocks
+        public const int TBL_HAND_REC_OFF_Y = 4;
+        public const int TBL_HAND_REC_OFF_Z = 8;
+        public const int TBL_HAND_REC_OFF_U = 12;  // texture coordinates
+        public const int TBL_HAND_REC_OFF_V = 16;
+        public const int TBL_HAND_REC_OFF_RGBA = 20;  // colour with lighting applied, r in the low byte
+        public const int TBL_HAND_REC_OFF_TEX = 24;  // GUI_TEX_* key
+        public const int TBL_PARTICLES_OFFSET = 1126864;  // Minecraft -> ULTRAKILL: Minecraft's live block particles (TerrainParticle), interpolated, for ULTRAKILL to draw as billboards
         public const int TBL_PARTICLES_SIZE = 73744;
         public const int TBL_PARTICLES_CAPACITY = 2048;
         public const int TBL_PARTICLES_OFF_SEQ = 0;  // seqlock, odd while writing
@@ -305,7 +321,6 @@ namespace UltraCraft.Bridge
         public const uint KEY_JUMP = 16u;
         public const uint KEY_SNEAK = 32u;
         public const uint KEY_SPRINT = 64u;
-        public const uint KEY_HOLD_TOGGLE = 128u;
 
         // Event kinds, shared with the Java side.
         public enum EventKind : uint

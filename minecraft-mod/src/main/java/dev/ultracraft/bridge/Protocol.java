@@ -6,7 +6,7 @@ public final class Protocol {
     public static final int MAGIC = 0x55544C52;
     public static final int VERSION = 1;
     public static final int HEADER_SIZE = 56;
-    public static final int TOTAL_SIZE = 971208;
+    public static final int TOTAL_SIZE = 1200608;
     public static final int SEQ_SIZE = 4;
 
     public static final int FLAG_UK_MOVEMENT = 1;
@@ -336,7 +336,23 @@ public final class Protocol {
     public static final int TBL_GUI_REC_OFF_V = 12;
     public static final int TBL_GUI_REC_OFF_RGBA = 16;  // colour, r in the low byte
     public static final int TBL_GUI_REC_OFF_TEX = 20;  // GUI_TEX_* key
-    public static final int TBL_PARTICLES_OFFSET = 897464;  // Minecraft -> ULTRAKILL: Minecraft's live block particles (TerrainParticle), interpolated, for ULTRAKILL to draw as billboards
+    public static final int TBL_HAND_OFFSET = 897464;  // Minecraft -> ULTRAKILL: Minecraft's first-person hands and held items this frame: posed, lit quads in Minecraft view space (camera looks down -z, y up), far first
+    public static final int TBL_HAND_SIZE = 229400;
+    public static final int TBL_HAND_CAPACITY = 8192;
+    public static final int TBL_HAND_OFF_SEQ = 0;  // seqlock, odd while writing
+    public static final int TBL_HAND_OFF_TICKTIMESTAMP = 4;  // epoch ms of the frame
+    public static final int TBL_HAND_OFF_COUNT = 12;  // valid vertices; 4 per quad
+    public static final int TBL_HAND_OFF_FOV = 16;  // Minecraft's hand field of view, vertical degrees (it draws hands with their own projection)
+    public static final int TBL_HAND_OFF_RECORDS = 24;
+    public static final int TBL_HAND_RECORD_SIZE = 28;
+    public static final int TBL_HAND_REC_OFF_X = 0;  // Minecraft view space, blocks
+    public static final int TBL_HAND_REC_OFF_Y = 4;
+    public static final int TBL_HAND_REC_OFF_Z = 8;
+    public static final int TBL_HAND_REC_OFF_U = 12;  // texture coordinates
+    public static final int TBL_HAND_REC_OFF_V = 16;
+    public static final int TBL_HAND_REC_OFF_RGBA = 20;  // colour with lighting applied, r in the low byte
+    public static final int TBL_HAND_REC_OFF_TEX = 24;  // GUI_TEX_* key
+    public static final int TBL_PARTICLES_OFFSET = 1126864;  // Minecraft -> ULTRAKILL: Minecraft's live block particles (TerrainParticle), interpolated, for ULTRAKILL to draw as billboards
     public static final int TBL_PARTICLES_SIZE = 73744;
     public static final int TBL_PARTICLES_CAPACITY = 2048;
     public static final int TBL_PARTICLES_OFF_SEQ = 0;  // seqlock, odd while writing
@@ -362,7 +378,6 @@ public final class Protocol {
     public static final int KEY_JUMP = 16;
     public static final int KEY_SNEAK = 32;
     public static final int KEY_SPRINT = 64;
-    public static final int KEY_HOLD_TOGGLE = 128;
 
     // Event kinds, shared with the C# side.
     public static final int EV_BLOCK_PLACED = 1;

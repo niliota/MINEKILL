@@ -55,6 +55,7 @@ public final class GuiCapture implements VertexConsumer {
     private boolean skip;     // current element's texture is unavailable to ULTRAKILL
     private boolean capturing;
     private final Map<Long, GuiItemRenderState> queuedItems = new HashMap<>();
+    private final Map<Long, List<dev.ultracraft.render.ModelCollector.Quad>> queuedEntities = new HashMap<>();
 
     private GuiCapture() {}
 
@@ -67,6 +68,7 @@ public final class GuiCapture implements VertexConsumer {
     public void begin() {
         n = 0;
         queuedItems.clear();
+        queuedEntities.clear();
         capturing = dev.ultracraft.UltraCraftClient.ukLive() && Minecraft.getInstance().level != null;
     }
 
@@ -85,6 +87,39 @@ public final class GuiCapture implements VertexConsumer {
     /** GuiRenderer.submitBlitFromItemAtlas: remember which item a coming blit stands for. */
     public void queueItem(GuiItemRenderState item) {
         if (capturing) queuedItems.put(key(item.x(), item.y(), item.pose()), item);
+    }
+
+    // Entities in the GUI (the inventory's player): Minecraft renders them to an offscreen
+    // texture (PictureInPictureRenderer) and blits that. The same pose, built in GUI pixels
+    // instead of texture pixels (prepare: translate to the box centre, scale(s, s, -s)), feeds
+    // the entity's submission into a ModelCollector; the quads replace the blit when it comes.
+    private static final Vector3f UI_L0 = new Vector3f(0.2f, -1.0f, 1.0f);    // GUI space: y down, viewer at +z
+    private static final Vector3f UI_L1 = new Vector3f(-0.2f, -1.0f, 0.0f);
+    private final dev.ultracraft.render.ModelCollector entityCollector = new dev.ultracraft.render.ModelCollector();
+
+    /** PictureInPictureRenderer.prepare HEAD, for a GuiEntityRenderState. */
+    public void queueEntity(net.minecraft.client.renderer.state.gui.pip.GuiEntityRenderState state) {
+        if (!capturing) return;
+        try {
+            PoseStack pose = new PoseStack();
+            pose.translate((state.x0() + state.x1()) / 2f, (state.y0() + state.y1()) / 2f, 0f);
+            pose.scale(state.scale(), state.scale(), -state.scale());
+            var t = state.translation();
+            pose.translate(t.x(), t.y(), t.z());
+            pose.rotate(state.rotation());
+            var camera = new net.minecraft.client.renderer.state.level.CameraRenderState();
+            if (state.overrideCameraAngle() != null) {
+                camera.orientation = state.overrideCameraAngle().conjugate(new org.joml.Quaternionf()).rotateY((float) Math.PI);
+            }
+            entityCollector.begin(new Matrix4f(), UI_L0, UI_L1, false);
+            Minecraft.getInstance().getEntityRenderDispatcher().submit(state.renderState(), camera, 0.0, 0.0, 0.0, pose, entityCollector);
+            queuedEntities.put(key(state.x0(), state.y0(), state.pose()), new ArrayList<>(entityCollector.sortedQuads()));
+        } catch (RuntimeException ex) {
+            if (!failureLogged) {
+                failureLogged = true;
+                org.slf4j.LoggerFactory.getLogger("ultracraft").warn("[UltraCraft] gui: entity capture failed: {}", ex.toString());
+            }
+        }
     }
 
     private boolean failureLogged;
@@ -111,6 +146,8 @@ public final class GuiCapture implements VertexConsumer {
         if (e instanceof BlitRenderState b) {
             GuiItemRenderState item = queuedItems.remove(key(b.x0(), b.y0(), b.pose()));
             if (item != null) { item(mc, item); return; }
+            var entity = queuedEntities.remove(key(b.x0(), b.y0(), b.pose()));
+            if (entity != null) { entityQuads(entity); return; }
         }
         if (!plainBlend(e.pipeline())) return;
         int k = GuiTextures.key(mc, e.textureSetup().texure0());
@@ -141,6 +178,22 @@ public final class GuiCapture implements VertexConsumer {
                     p.getLocation(), f);
         }
         return false;
+    }
+
+    /** The entity's quads, already in GUI pixels and sorted far first. */
+    private void entityQuads(List<dev.ultracraft.render.ModelCollector.Quad> quads) {
+        for (var q : quads) {
+            if (n + 4 > CAP) break;
+            for (int k = 0; k < 4; k++) {
+                xyuv[n * 4] = q.x[k];
+                xyuv[n * 4 + 1] = q.y[k];
+                xyuv[n * 4 + 2] = q.u[k];
+                xyuv[n * 4 + 3] = q.v[k];
+                rgba[n] = q.rgba;
+                tex[n] = q.tex;
+                n++;
+            }
+        }
     }
 
     // ---- VertexConsumer: Minecraft's GUI quads ---------------------------------

@@ -25,6 +25,9 @@ namespace UltraCraft
         private readonly byte[] _table = new byte[Protocol.TBL_GUI_OFF_RECORDS + Protocol.TBL_GUI_CAPACITY * Protocol.TBL_GUI_RECORD_SIZE];
         private int _count;
         private Material _mat;
+        private readonly byte[] _hand = new byte[Protocol.TBL_HAND_OFF_RECORDS + Protocol.TBL_HAND_CAPACITY * Protocol.TBL_HAND_RECORD_SIZE];
+        private int _handCount;
+        private Material _handMat;
         private int _scanFrame = -1000;
         private HudController[] _huds = new HudController[0];
         private Crosshair[] _crosshairs = new Crosshair[0];
@@ -63,6 +66,10 @@ namespace UltraCraft
                 uint sc = BitConverter.ToUInt32(_table, Protocol.TBL_GUI_OFF_GUISCALE);
                 if (sc > 0) GuiScale = sc;
             }
+            int h = _bridge.ReadHandTable(_hand);
+            if (h >= 0 && DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - BitConverter.ToInt64(_hand, Protocol.TBL_HAND_OFF_TICKTIMESTAMP) > 2000)
+                h = 0;
+            if (h >= 0) _handCount = h;
             if (Time.frameCount - _scanFrame > 120)
             {
                 _scanFrame = Time.frameCount;
@@ -115,7 +122,9 @@ namespace UltraCraft
 
         public void OnGUI()
         {
-            if (Event.current.type != EventType.Repaint || _count <= 0) return;
+            if (Event.current.type != EventType.Repaint) return;
+            DrawHand();
+            if (_count <= 0) return;
             if (_mat == null)
                 _mat = new Material(Shader.Find("Sprites/Default")) { hideFlags = HideFlags.HideAndDontSave, name = "UltraCraft.Gui" };
 
@@ -155,6 +164,63 @@ namespace UltraCraft
                                  BitConverter.ToSingle(_table, o + Protocol.TBL_GUI_REC_OFF_V));
                     GL.Vertex3(BitConverter.ToSingle(_table, o + Protocol.TBL_GUI_REC_OFF_X) * scale,
                                BitConverter.ToSingle(_table, o + Protocol.TBL_GUI_REC_OFF_Y) * scale, 0);
+                }
+            }
+            if (drawing) GL.End();
+            GL.PopMatrix();
+        }
+
+        /// <summary>
+        /// Minecraft's first-person hands and held item, under the GUI: view-space quads (already
+        /// posed, lit and sorted far first by Minecraft) drawn with Minecraft's own hand projection,
+        /// as Minecraft draws them with their own FOV over the world. UI/Default with its GUI depth
+        /// test set to Always, so whatever depth the frame left behind does not cut into them.
+        /// </summary>
+        private void DrawHand()
+        {
+            if (_handCount <= 0) return;
+            if (_handMat == null)
+            {
+                _handMat = new Material(Shader.Find("UI/Default")) { hideFlags = HideFlags.HideAndDontSave, name = "UltraCraft.Hand" };
+                _handMat.SetInt("unity_GUIZTestMode", (int)UnityEngine.Rendering.CompareFunction.Always);
+            }
+            float fov = BitConverter.ToSingle(_hand, Protocol.TBL_HAND_OFF_FOV);
+            if (fov <= 1f || fov >= 179f) fov = 70f;
+            int r0 = Protocol.TBL_HAND_OFF_RECORDS, rs = Protocol.TBL_HAND_RECORD_SIZE;
+
+            GL.PushMatrix();
+            GL.LoadProjectionMatrix(Matrix4x4.Perspective(fov, Screen.width / (float)Mathf.Max(1, Screen.height), 0.05f, 100f));
+            GL.modelview = Matrix4x4.identity;   // Minecraft view space: camera looks down -z, y up, as Unity's
+            int curKey = int.MinValue;
+            bool drawing = false, skip = false;
+            for (int q = 0; q + 3 < _handCount; q += 4)
+            {
+                int key = BitConverter.ToInt32(_hand, r0 + q * rs + Protocol.TBL_HAND_REC_OFF_TEX);
+                if (key != curKey)
+                {
+                    if (drawing) { GL.End(); drawing = false; }
+                    curKey = key;
+                    Texture tex = _world.GuiTexture(key);
+                    skip = tex == null;
+                    if (!skip)
+                    {
+                        _handMat.mainTexture = tex;
+                        _handMat.SetPass(0);
+                        GL.Begin(GL.QUADS);
+                        drawing = true;
+                    }
+                }
+                if (skip) continue;
+                for (int k = 0; k < 4; k++)
+                {
+                    int o = r0 + (q + k) * rs;
+                    int c = BitConverter.ToInt32(_hand, o + Protocol.TBL_HAND_REC_OFF_RGBA);
+                    GL.Color(new Color32((byte)c, (byte)(c >> 8), (byte)(c >> 16), (byte)(c >> 24)));
+                    GL.TexCoord2(BitConverter.ToSingle(_hand, o + Protocol.TBL_HAND_REC_OFF_U),
+                                 BitConverter.ToSingle(_hand, o + Protocol.TBL_HAND_REC_OFF_V));
+                    GL.Vertex3(BitConverter.ToSingle(_hand, o + Protocol.TBL_HAND_REC_OFF_X),
+                               BitConverter.ToSingle(_hand, o + Protocol.TBL_HAND_REC_OFF_Y),
+                               BitConverter.ToSingle(_hand, o + Protocol.TBL_HAND_REC_OFF_Z));
                 }
             }
             if (drawing) GL.End();
