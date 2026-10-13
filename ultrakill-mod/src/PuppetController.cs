@@ -1,8 +1,8 @@
 using System;
 using UnityEngine;
-using UltraCraft.Bridge;
+using Minekill.Bridge;
 
-namespace UltraCraft
+namespace Minekill
 {
     /// <summary>
     /// Drives ULTRAKILL's player from Minecraft's position.

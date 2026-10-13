@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.Rendering;
-using UltraCraft.Bridge;
+using Minekill.Bridge;
 
-namespace UltraCraft
+namespace Minekill
 {
     /// <summary>
     /// The world layer, ULTRAKILL side: Minecraft's blocks drawn natively in ULTRAKILL's scene.
@@ -120,7 +120,7 @@ namespace UltraCraft
             else
                 _log.LogError($"world: stream failed to open at {_stream.Path}: {_stream.LastError}");
 
-            _root = new GameObject("UltraCraft.McWorld") { hideFlags = HideFlags.HideAndDontSave };
+            _root = new GameObject("MINEKILL.McWorld") { hideFlags = HideFlags.HideAndDontSave };
             _root.SetActive(false);
         }
 
@@ -199,7 +199,7 @@ namespace UltraCraft
                 filterMode = FilterMode.Point,
                 wrapMode = TextureWrapMode.Clamp,
                 hideFlags = HideFlags.HideAndDontSave,
-                name = "UltraCraft.BlockAtlas",
+                name = "MINEKILL.BlockAtlas",
             };
             var pixels = new byte[bytes];
             Buffer.BlockCopy(data, 8, pixels, 0, bytes);
@@ -242,7 +242,7 @@ namespace UltraCraft
         {
             int id = BitConverter.ToInt32(data, 0), w = BitConverter.ToInt32(data, 4), h = BitConverter.ToInt32(data, 8);
             if (w <= 0 || h <= 0 || len < 12 + w * h * 4) { _log.LogError($"world: bad extra atlas {id} {w}x{h}"); return; }
-            Texture2D tex = MakeTexture(data, 12, w, h, id == Protocol.STREAM_ATLAS_ITEMS ? "UltraCraft.ItemAtlas" : "UltraCraft.GuiAtlas");
+            Texture2D tex = MakeTexture(data, 12, w, h, id == Protocol.STREAM_ATLAS_ITEMS ? "MINEKILL.ItemAtlas" : "MINEKILL.GuiAtlas");
             if (id == Protocol.STREAM_ATLAS_ITEMS) { if (ItemAtlas != null) UnityEngine.Object.Destroy(ItemAtlas); ItemAtlas = tex; }
             else if (id == Protocol.STREAM_ATLAS_GUI) { if (GuiAtlas != null) UnityEngine.Object.Destroy(GuiAtlas); GuiAtlas = tex; }
             else { UnityEngine.Object.Destroy(tex); return; }
@@ -317,7 +317,7 @@ namespace UltraCraft
                 {
                     // Repeat: menu backgrounds tile their texture across the screen (UVs beyond 1).
                     filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Repeat,
-                    hideFlags = HideFlags.HideAndDontSave, name = $"UltraCraft.GuiTexture{key}",
+                    hideFlags = HideFlags.HideAndDontSave, name = $"MINEKILL.GuiTexture{key}",
                 };
                 tex.SetPixels32(new Color32[w * h]);
                 _dynamic[key] = tex;
@@ -388,7 +388,7 @@ namespace UltraCraft
                 }
             }
 
-            var mesh = new Mesh { name = $"UltraCraft.Section {sx},{sy},{sz}", hideFlags = HideFlags.HideAndDontSave };
+            var mesh = new Mesh { name = $"MINEKILL.Section {sx},{sy},{sz}", hideFlags = HideFlags.HideAndDontSave };
             if (n > 65535) mesh.indexFormat = IndexFormat.UInt32;
             mesh.vertices = verts;
             mesh.uv = uvs;
@@ -401,7 +401,7 @@ namespace UltraCraft
             mesh.RecalculateBounds();
 
             EnsureFallback();
-            var go = new GameObject($"UltraCraft.Section {sx},{sy},{sz}") { hideFlags = HideFlags.HideAndDontSave, layer = RenderLayer };
+            var go = new GameObject($"MINEKILL.Section {sx},{sy},{sz}") { hideFlags = HideFlags.HideAndDontSave, layer = RenderLayer };
             go.transform.SetParent(_root.transform, false);
             go.transform.localPosition = new Vector3(sx * 16, sy * 16, sz * 16);
             go.AddComponent<MeshFilter>().sharedMesh = mesh;
@@ -453,19 +453,19 @@ namespace UltraCraft
 
         private void CreateOutline()
         {
-            _outlineMesh = new Mesh { name = "UltraCraft.Outline", hideFlags = HideFlags.HideAndDontSave };
+            _outlineMesh = new Mesh { name = "MINEKILL.Outline", hideFlags = HideFlags.HideAndDontSave };
             _outlineMesh.vertices = new Vector3[8];
             // Minecraft's outline colour: black at 40% opacity.
             var c = new Color32(0, 0, 0, 102);
             _outlineMesh.colors32 = new[] { c, c, c, c, c, c, c, c };
             _outlineMesh.SetIndices(new[] { 0,1, 1,2, 2,3, 3,0, 4,5, 5,6, 6,7, 7,4, 0,4, 1,5, 2,6, 3,7 },
                                     MeshTopology.Lines, 0);
-            _outline = new GameObject("UltraCraft.Outline") { hideFlags = HideFlags.HideAndDontSave, layer = RenderLayer };
+            _outline = new GameObject("MINEKILL.Outline") { hideFlags = HideFlags.HideAndDontSave, layer = RenderLayer };
             _outline.transform.SetParent(_root.transform, false);
             _outline.AddComponent<MeshFilter>().sharedMesh = _outlineMesh;
             var mr = _outline.AddComponent<MeshRenderer>();
             Shader sh = Shader.Find("Sprites/Default") ?? Shader.Find("Unlit/Texture");
-            mr.sharedMaterial = new Material(sh) { hideFlags = HideFlags.HideAndDontSave, name = "UltraCraft.Outline" };
+            mr.sharedMaterial = new Material(sh) { hideFlags = HideFlags.HideAndDontSave, name = "MINEKILL.Outline" };
             mr.shadowCastingMode = ShadowCastingMode.Off;
             mr.receiveShadows = false;
             _outline.SetActive(false);
@@ -547,9 +547,9 @@ namespace UltraCraft
                 n = 0;
             if (_models == null)
             {
-                _modelMesh = new Mesh { name = "UltraCraft.WorldModels", hideFlags = HideFlags.HideAndDontSave };
+                _modelMesh = new Mesh { name = "MINEKILL.WorldModels", hideFlags = HideFlags.HideAndDontSave };
                 _modelMesh.MarkDynamic();
-                _models = new GameObject("UltraCraft.WorldModels") { hideFlags = HideFlags.HideAndDontSave, layer = RenderLayer };
+                _models = new GameObject("MINEKILL.WorldModels") { hideFlags = HideFlags.HideAndDontSave, layer = RenderLayer };
                 _models.transform.SetParent(_root.transform, false);
                 _models.AddComponent<MeshFilter>().sharedMesh = _modelMesh;
                 var r = _models.AddComponent<MeshRenderer>();
@@ -639,7 +639,7 @@ namespace UltraCraft
             if (m2.HasProperty("_Color")) m2.SetColor("_Color", Color.white);
             _modelTemplate = m2;
             _modelMats.Clear();
-            _particleMat = new Material(m2) { hideFlags = HideFlags.HideAndDontSave, name = "UltraCraft.Particles" };
+            _particleMat = new Material(m2) { hideFlags = HideFlags.HideAndDontSave, name = "MINEKILL.Particles" };
             SetAtlas(_particleMat);
             _log.LogInfo($"world: model material from '{t.name}' ({Signature(t)}); keywords [{string.Join(" ", m2.shaderKeywords)}]");
         }
@@ -677,7 +677,7 @@ namespace UltraCraft
                 EnsureMultiplyShader();
                 if (_multiplyShader == null) return null;
                 if (_modelMats.TryGetValue(key, out Material cm) && cm != null) return cm;
-                cm = new Material(_multiplyShader) { hideFlags = HideFlags.HideAndDontSave, name = $"UltraCraft.Crack{key & 0xFFFFFF}" };
+                cm = new Material(_multiplyShader) { hideFlags = HideFlags.HideAndDontSave, name = $"MINEKILL.Crack{key & 0xFFFFFF}" };
                 cm.mainTexture = GuiTexture(key & 0xFFFFFF);
                 _modelMats[key] = cm;
                 return cm;
@@ -689,7 +689,7 @@ namespace UltraCraft
                 m.mainTexture = GuiTexture(key);
                 return m;
             }
-            m = new Material(template) { hideFlags = HideFlags.HideAndDontSave, name = $"UltraCraft.Model{key}" };
+            m = new Material(template) { hideFlags = HideFlags.HideAndDontSave, name = $"MINEKILL.Model{key}" };
             m.mainTexture = GuiTexture(key);
             _modelMats[key] = m;
             return m;
@@ -697,9 +697,9 @@ namespace UltraCraft
 
         private void CreateParticles()
         {
-            _particleMesh = new Mesh { name = "UltraCraft.Particles", hideFlags = HideFlags.HideAndDontSave };
+            _particleMesh = new Mesh { name = "MINEKILL.Particles", hideFlags = HideFlags.HideAndDontSave };
             _particleMesh.MarkDynamic();
-            _particles = new GameObject("UltraCraft.Particles") { hideFlags = HideFlags.HideAndDontSave, layer = RenderLayer };
+            _particles = new GameObject("MINEKILL.Particles") { hideFlags = HideFlags.HideAndDontSave, layer = RenderLayer };
             _particles.AddComponent<MeshFilter>().sharedMesh = _particleMesh;
             var mr = _particles.AddComponent<MeshRenderer>();
             EnsureFallback();

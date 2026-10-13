@@ -4,7 +4,7 @@ using System.Diagnostics;
 using System.Threading.Tasks;
 using UnityEngine;
 
-namespace UltraCraft
+namespace Minekill
 {
     /// <summary>
     /// ULTRAKILL collision that is not an exact box (MeshColliders, rotated boxes, anything

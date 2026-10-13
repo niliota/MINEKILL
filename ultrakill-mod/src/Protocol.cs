@@ -2,7 +2,7 @@
 // Source of truth: bridge/protocol/generate.py </auto-generated>
 using System.Runtime.InteropServices;
 
-namespace UltraCraft.Bridge
+namespace Minekill.Bridge
 {
     public static class Protocol
     {

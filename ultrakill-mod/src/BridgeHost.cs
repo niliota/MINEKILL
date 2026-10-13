@@ -2,11 +2,11 @@ using System;
 using BepInEx;
 using BepInEx.Logging;
 using UnityEngine;
-using UltraCraft.Bridge;
+using Minekill.Bridge;
 // UnityEngine also has a Logger type, so qualify BepInEx's explicitly.
 using BepLogger = BepInEx.Logging.Logger;
 
-namespace UltraCraft
+namespace Minekill
 {
     /// <summary>
     /// Owns the bridge and keeps it alive.
@@ -35,7 +35,7 @@ namespace UltraCraft
         /// whole point of logging the resolved path is to be able to see it.
         /// </summary>
         private static readonly ManualLogSource Log =
-            BepLogger.CreateLogSource("UltraCraft");
+            BepLogger.CreateLogSource("MINEKILL");
 
         private static BridgeHost _instance;
 
@@ -50,7 +50,7 @@ namespace UltraCraft
         {
             if (_instance != null) return _instance;
 
-            var go = new GameObject("UltraCraft.Host")
+            var go = new GameObject("MINEKILL.Host")
             {
                 // Survives scene loads, and does not clutter the hierarchy.
                 hideFlags = HideFlags.HideAndDontSave
@@ -87,7 +87,7 @@ namespace UltraCraft
 
         private bool Open()
         {
-            // null means: ask the ULTRACRAFT_BRIDGE environment variable, else fall
+            // null means: ask the MINEKILL_BRIDGE environment variable, else fall
             // back to a path next to the plugin.
             _bridge = new BridgeTransport(null);
             string file = _bridge.Path;

@@ -1,4 +1,4 @@
-# Bridge contract — UltraCraft
+# Bridge contract — MINEKILL
 
 Two games, one shared world. Minecraft is the simulation and content engine; ULTRAKILL is
 the host world, renderer, camera and game shell. Every value that crosses between them is
@@ -92,8 +92,8 @@ from `GameManager` at runtime during the first canary and recorded here.
 | `RING_MC_EVENTS` | queue | MC → UK | as they occur (defined, unused) | Blocked writes drop the **newest** event and increment a dropped counter. Mining/damage events are rate-limited anyway. |
 | `RING_UK_EVENTS` | queue | UK → MC | as they occur (defined, unused) | Same. Block-placed events drop rather than corrupt the stream. |
 
-- **Transport:** one memory-mapped file at `/var/tmp/ultracraft.bridge` (size in `PROTOCOL.md`), which
-  ULTRAKILL names as `Z:\var\tmp\ultracraft.bridge`. `Z:` is the filesystem root inside Wine
+- **Transport:** one memory-mapped file at `/var/tmp/minekill.bridge` (size in `PROTOCOL.md`), which
+  ULTRAKILL names as `Z:\var\tmp\minekill.bridge`. `Z:` is the filesystem root inside Wine
   and is the only anchor that does not depend on the prefix's layout or the username.
   A mapped file rather than a Windows named shared-memory object because the two processes
   are on **different sides of the Wine boundary** — Minecraft is native Linux, ULTRAKILL is
@@ -205,7 +205,7 @@ These are not design choices, they are facts about the environment that cost tim
   matches. Use `pgrep -x` and kill by exact PID.
 - **Never use a relative path for the shared bridge file.** Both processes resolve it against
   their own working directory and end up on different files. It presents exactly like a dead
-  bridge. Default is `/var/tmp/ultracraft.bridge` (`Z:\var\tmp\...` in Wine). Home-directory
+  bridge. Default is `/var/tmp/minekill.bridge` (`Z:\var\tmp\...` in Wine). Home-directory
   paths were tried and abandoned: Wine nulls `HOME`, `USERPROFILE` is not the Linux home, and
   prefixes differ in how they map drives.
 - **`UnityEngine.Debug.Log` is invisible by default.** It only reaches `LogOutput.log` when

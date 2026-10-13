@@ -30,7 +30,7 @@ Recorded 2026-10-08 so a future session does not have to rediscover it.
 
 ## Minecraft
 
-- Managed by **FreesmLauncher**, instance name `UltraCraft`.
+- Managed by **FreesmLauncher**, instance name `MINEKILL`.
 - Instance at `UltraCraft/` (canonical), launched from FreesmLauncher.
   `~/Games/Minecraft/Instances/UltraCraft` is a symlink to it.
 - **Minecraft 26.3**, **Fabric Loader 0.19.5**, mixinextras 0.5.5, Java 25.
@@ -50,13 +50,13 @@ Recorded 2026-10-08 so a future session does not have to rediscover it.
 
 No configuration is needed. Both sides default to the same file:
 
-- Minecraft (native): `/var/tmp/ultracraft.bridge`
-- ULTRAKILL (Wine): `Z:\var\tmp\ultracraft.bridge`
+- Minecraft (native): `/var/tmp/minekill.bridge`
+- ULTRAKILL (Wine): `Z:\var\tmp\minekill.bridge`
 
 Wine maps `Z:` to `/`, so those are the same file. ULTRAKILL also writes its live state to
 `/var/tmp/ultrakill-status.txt`, which is more reliable than BepInEx's log under Wine.
 
-`ULTRACRAFT_BRIDGE` overrides the path on either side, for unusual setups only. If set, it
+`MINEKILL_BRIDGE` overrides the path on either side, for unusual setups only. If set, it
 must name the same file on both sides (Linux form for Minecraft, `Z:` form for ULTRAKILL) and
 must be absolute.
 

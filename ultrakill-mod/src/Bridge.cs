@@ -4,10 +4,10 @@ using System.IO.MemoryMappedFiles;
 using System.Runtime.InteropServices;
 using System.Threading;
 
-namespace UltraCraft.Bridge
+namespace Minekill.Bridge
 {
     /// <summary>
-    /// The UltraCraft bridge transport.
+    /// The MINEKILL bridge transport.
     ///
     /// One memory-mapped file, opened by both processes. A mapped file rather than a
     /// Windows named shared-memory object, because Minecraft runs natively on Linux
@@ -21,14 +21,14 @@ namespace UltraCraft.Bridge
     /// </summary>
     public sealed class BridgeTransport : IDisposable
     {
-        public const string DefaultFileName = "ultracraft.bridge";
+        public const string DefaultFileName = "minekill.bridge";
 
         /// <summary>
         /// Environment variable that points both sides at the same file. This is an
         /// override for unusual setups; normally the shared default path below is
         /// used and no configuration is needed.
         /// </summary>
-        public const string PathEnvVar = "ULTRACRAFT_BRIDGE";
+        public const string PathEnvVar = "MINEKILL_BRIDGE";
 
         /// <summary>
         /// Where the bridge lives when nothing overrides it.
@@ -51,7 +51,7 @@ namespace UltraCraft.Bridge
         /// assumptions about the prefix, so both sides name the same real file from
         /// opposite sides of the Wine boundary:
         ///
-        ///     Z:\var\tmp\ultracraft.bridge  ==  /var/tmp/ultracraft.bridge
+        ///     Z:\var\tmp\minekill.bridge  ==  /var/tmp/minekill.bridge
         ///
         /// A relative default must never be used here: each process would resolve it
         /// against its own working directory and quietly open two different files,

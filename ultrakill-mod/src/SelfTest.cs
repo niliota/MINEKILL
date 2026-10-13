@@ -1,8 +1,8 @@
 using System;
 using System.Runtime.InteropServices;
-using UltraCraft.Bridge;
+using Minekill.Bridge;
 
-namespace UltraCraft
+namespace Minekill
 {
     /// <summary>
     /// Proves that what ULTRAKILL writes into the shared file is where Minecraft will

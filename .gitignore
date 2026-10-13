@@ -5,7 +5,8 @@ build/
 .gradle/
 
 # ---- game-derived and machine-specific content: never commit ----
-# ULTRAKILL/ and UltraCraft/ are copies of the user's own game installs. They are
+# ULTRAKILL/ and UltraCraft/ are copies of the user's own game installs (UltraCraft/ is the
+# Minecraft instance folder, which kept its name when the project became MINEKILL). They are
 # large, they contain copyrighted game assets, and they are not ours to publish.
 ULTRAKILL/
 UltraCraft/

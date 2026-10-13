@@ -6,10 +6,10 @@ public class LayoutCheck
 {
     public static void main(String[] args)
     {
-        System.out.println("CONST:HEADER_SIZE:" + dev.ultracraft.bridge.Protocol.HEADER_SIZE);
-        System.out.println("CONST:TOTAL_SIZE:" + dev.ultracraft.bridge.Protocol.TOTAL_SIZE);
+        System.out.println("CONST:HEADER_SIZE:" + dev.minekill.bridge.Protocol.HEADER_SIZE);
+        System.out.println("CONST:TOTAL_SIZE:" + dev.minekill.bridge.Protocol.TOTAL_SIZE);
         // Same set the C# side prints: every slot/ring offset and every table constant.
-        for (java.lang.reflect.Field f : dev.ultracraft.bridge.Protocol.class.getFields())
+        for (java.lang.reflect.Field f : dev.minekill.bridge.Protocol.class.getFields())
         {
             String n = f.getName();
             if (f.getType() != int.class) continue;
@@ -19,24 +19,24 @@ public class LayoutCheck
             catch (IllegalAccessException e) { System.out.println("CONST:" + n + ":UNREADABLE"); }
         }
 
-        dumpSlot("SlotPlayer", dev.ultracraft.bridge.Protocol.SlotPlayer.class,
-                 dev.ultracraft.bridge.Protocol.SlotPlayer.SIZE,
-                 dev.ultracraft.bridge.Protocol.SlotPlayer.OFF_SEQ);
-        dumpSlot("SlotCamera", dev.ultracraft.bridge.Protocol.SlotCamera.class,
-                 dev.ultracraft.bridge.Protocol.SlotCamera.SIZE,
-                 dev.ultracraft.bridge.Protocol.SlotCamera.OFF_SEQ);
-        dumpSlot("SlotInput", dev.ultracraft.bridge.Protocol.SlotInput.class,
-                 dev.ultracraft.bridge.Protocol.SlotInput.SIZE,
-                 dev.ultracraft.bridge.Protocol.SlotInput.OFF_SEQ);
-        dumpSlot("SlotCorrection", dev.ultracraft.bridge.Protocol.SlotCorrection.class,
-                 dev.ultracraft.bridge.Protocol.SlotCorrection.SIZE,
-                 dev.ultracraft.bridge.Protocol.SlotCorrection.OFF_SEQ);
-        dumpSlot("SlotLevel", dev.ultracraft.bridge.Protocol.SlotLevel.class,
-                 dev.ultracraft.bridge.Protocol.SlotLevel.SIZE,
-                 dev.ultracraft.bridge.Protocol.SlotLevel.OFF_SEQ);
-        dumpSlot("SlotSelection", dev.ultracraft.bridge.Protocol.SlotSelection.class,
-                 dev.ultracraft.bridge.Protocol.SlotSelection.SIZE,
-                 dev.ultracraft.bridge.Protocol.SlotSelection.OFF_SEQ);
+        dumpSlot("SlotPlayer", dev.minekill.bridge.Protocol.SlotPlayer.class,
+                 dev.minekill.bridge.Protocol.SlotPlayer.SIZE,
+                 dev.minekill.bridge.Protocol.SlotPlayer.OFF_SEQ);
+        dumpSlot("SlotCamera", dev.minekill.bridge.Protocol.SlotCamera.class,
+                 dev.minekill.bridge.Protocol.SlotCamera.SIZE,
+                 dev.minekill.bridge.Protocol.SlotCamera.OFF_SEQ);
+        dumpSlot("SlotInput", dev.minekill.bridge.Protocol.SlotInput.class,
+                 dev.minekill.bridge.Protocol.SlotInput.SIZE,
+                 dev.minekill.bridge.Protocol.SlotInput.OFF_SEQ);
+        dumpSlot("SlotCorrection", dev.minekill.bridge.Protocol.SlotCorrection.class,
+                 dev.minekill.bridge.Protocol.SlotCorrection.SIZE,
+                 dev.minekill.bridge.Protocol.SlotCorrection.OFF_SEQ);
+        dumpSlot("SlotLevel", dev.minekill.bridge.Protocol.SlotLevel.class,
+                 dev.minekill.bridge.Protocol.SlotLevel.SIZE,
+                 dev.minekill.bridge.Protocol.SlotLevel.OFF_SEQ);
+        dumpSlot("SlotSelection", dev.minekill.bridge.Protocol.SlotSelection.class,
+                 dev.minekill.bridge.Protocol.SlotSelection.SIZE,
+                 dev.minekill.bridge.Protocol.SlotSelection.OFF_SEQ);
     }
 
     static void dumpSlot(String name, Class<?> cls, int size, int seqOff)

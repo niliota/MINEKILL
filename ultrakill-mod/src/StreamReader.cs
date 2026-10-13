@@ -4,7 +4,7 @@ using System.IO;
 using System.IO.MemoryMappedFiles;
 using System.Threading;
 
-namespace UltraCraft.Bridge
+namespace Minekill.Bridge
 {
     /// <summary>
     /// Reader side of the STREAM file: bulk data Minecraft sends (texture atlas, block meshes).
@@ -17,7 +17,7 @@ namespace UltraCraft.Bridge
     /// </summary>
     public sealed class StreamReader : IDisposable
     {
-        public const string FileName = "ultracraft.stream";
+        public const string FileName = "minekill.stream";
 
         private MemoryMappedFile _mmf;
         private MemoryMappedViewAccessor _view;
