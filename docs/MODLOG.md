@@ -2297,3 +2297,18 @@ between anchors (-1.500 and -1.177 units in one session), but that is ~0.17 bloc
 which ground and how it shows.
 
 User confirmed: F5 (both views, camera clipping), third-person body with transparent outer layer, cracks, and keys all work. The ground offset comes and goes between level resets (anchor-time measurement), not from a code change.
+
+### F3, middle click; anchor feet on the floor
+
+- **F3** joins the gameplay keys (down and up, so Minecraft toggles the overlay on release).
+  While F3 is held every other key also goes to Minecraft, so F3 combinations work through
+  Minecraft's own keyDebugModifier mapping; each combination key gets its release too.
+- **Middle click**: new event kind MOUSE_BUTTON (a = SDL button, b = press/release), replayed
+  through `MouseHandler.onButton` like left/right; works in the world (pick block) and in screens.
+- **Ground shifting between resets:** one session's anchors logged capsule feet offsets from
+  -0.74 to -1.50 units and anchor heights 0.8 units apart on the same level (the capsule's height
+  animates at level start, and the player may still be dropping in). The anchor now raycasts
+  down (ULTRAKILL Environment layers, up to 3 blocks) and puts the feet on the floor under spawn;
+  Minecraft's player is held at spawn meanwhile, so spawn maps onto that floor every time.
+
+User confirmed: F3 (and combinations), middle click, and blocks staying put across level resets.

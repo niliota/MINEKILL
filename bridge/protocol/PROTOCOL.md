@@ -375,3 +375,4 @@ single-consumer byte ring; records are 8-byte aligned `u32 type, u32 length, pay
 | 6 | `PLAYER_RESPAWN` |
 | 7 | `KEY` |
 | 8 | `CHAR` |
+| 9 | `MOUSE_BUTTON` |

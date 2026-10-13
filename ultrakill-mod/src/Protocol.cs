@@ -351,6 +351,7 @@ namespace UltraCraft.Bridge
             PLAYER_RESPAWN = 6,
             KEY = 7,
             CHAR = 8,
+            MOUSE_BUTTON = 9,
         }
     }
 }

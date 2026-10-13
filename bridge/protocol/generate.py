@@ -489,6 +489,9 @@ EVENT_KINDS = {
     "KEY": 7,
     # Typed character (UK_EVENTS ring): a = Unicode code point.
     "CHAR": 8,
+    # Extra mouse button (UK_EVENTS ring): a = SDL button (2 = middle), b = 1 press / 0 release.
+    # Left and right stay in the INPUT slot (attack/use, held state).
+    "MOUSE_BUTTON": 9,
 }
 
 

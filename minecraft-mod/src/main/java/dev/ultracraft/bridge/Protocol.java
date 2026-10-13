@@ -408,4 +408,5 @@ public final class Protocol {
     public static final int EV_PLAYER_RESPAWN = 6;
     public static final int EV_KEY = 7;
     public static final int EV_CHAR = 8;
+    public static final int EV_MOUSE_BUTTON = 9;
 }
