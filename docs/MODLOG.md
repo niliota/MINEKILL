@@ -2336,3 +2336,22 @@ all of Minecraft's mobs and entities.
   the default (F10 still cycles); particles use it too.
 
 User confirmed: mobs, items, tridents, arrows, chests and beds render; water blue; fire correct (static); grass, glass and water transparency fine; performance fine. Open: chests/beds in the hotbar, animated textures, entity collision with ULTRAKILL geometry.
+
+### Collision for every entity
+
+- EntityCollisionMixin no longer filters to players: every entity's movement (mobs and other
+  server-side entities on the integrated server thread, items, minecarts, ...) collides with
+  ULTRAKILL's boxes. UkCollision indexes the snapshot in an 8-block column grid (boxes spanning
+  more than 64 cells kept in a list every query checks), since every mob queries several times a
+  tick on two threads.
+- New table COLLISION_INTEREST (Minecraft -> ULTRAKILL, 128 points): every 5 frames,
+  `CollisionInterest` clusters the entities within 48 blocks into 4-block cells, nearest first.
+- CollisionPublisher adds the environment colliders within 5 blocks of each point to the
+  player's (deduplicated, into one hit list, so collider tracking/invalidation covers them).
+  VoxelField probes a 9-block cube around each point round-robin with an extra 1 ms/frame,
+  merges those blocks too, and keeps them through eviction. COLLISION capacity 4096 -> 16384.
+- Not covered: mob pathfinding is block-based (a mob does not know an ULTRAKILL floor is walkable
+  ground and will not path across it, though it stands on it), and arrows/tridents fly by
+  raycast, not by collision, so they still pass through ULTRAKILL walls.
+
+User confirmed: entities collide with ULTRAKILL walls and floors. Pathfinding does not (as expected).

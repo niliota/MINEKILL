@@ -34,6 +34,7 @@ public class UltraCraftClient implements ClientModInitializer {
     private dev.ultracraft.render.WorldMesher mesher;
     private final dev.ultracraft.render.ParticleExport particles = new dev.ultracraft.render.ParticleExport();
     private final dev.ultracraft.render.WorldModels worldModels = new dev.ultracraft.render.WorldModels();
+    private final CollisionInterest collisionInterest = new CollisionInterest();
 
     /**
      * Whether Minecraft should behave as if its window were focused.
@@ -186,6 +187,7 @@ public class UltraCraftClient implements ClientModInitializer {
         if (mesher != null && ukAlive) mesher.frame(mc);
         if (ukAlive) particles.frame(mc, bridge);
         if (ukAlive) worldModels.frame(mc, bridge);
+        if (ukAlive) collisionInterest.frame(mc, bridge);
         if (ukAlive && stream != null && stream.ok()) dev.ultracraft.gui.GuiTextures.flush(stream);
 
         if (++ticks % 200 == 0) {

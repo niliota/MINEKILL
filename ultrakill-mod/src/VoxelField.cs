@@ -34,6 +34,8 @@ namespace UltraCraft
         /// <summary>Minimum seconds between background merges.</summary>
         private const float RebuildInterval = 0.25f;
         private const int MaxBlocks = 60000;          // cache size before far blocks are evicted
+        private const int InterestR = 4;              // blocks probed around each entity cluster
+        private const double InterestBudgetMs = 1.0;  // extra probe time per frame for them
         /// <summary>Probe boxes are shrunk by this (blocks) so a surface lying exactly on a
         /// cell boundary marks one cell, not both.</summary>
         private const float Eps = 0.004f;
@@ -52,6 +54,9 @@ namespace UltraCraft
         private readonly Collider[] _buf = new Collider[64];
         private readonly Stopwatch _sw = new Stopwatch();
         private readonly Vector3Int[] _offsets;
+        private readonly Vector3Int[] _interestOffsets;
+        private readonly List<Vector3Int> _interest = new List<Vector3Int>();
+        private int _interestCenter, _interestScan;
         private int _mask;
 
         private uint _generation = uint.MaxValue;
@@ -92,11 +97,32 @@ namespace UltraCraft
                 list.Add(new Vector3Int(x, y, z));
             list.Sort((p, q) => p.sqrMagnitude.CompareTo(q.sqrMagnitude));
             _offsets = list.ToArray();
+
+            var small = new List<Vector3Int>();
+            for (int x = -InterestR; x <= InterestR; x++)
+            for (int y = -InterestR; y <= InterestR; y++)
+            for (int z = -InterestR; z <= InterestR; z++)
+                small.Add(new Vector3Int(x, y, z));
+            small.Sort((p, q) => p.sqrMagnitude.CompareTo(q.sqrMagnitude));
+            _interestOffsets = small.ToArray();
         }
 
         /// <summary>Probe more blocks, within the frame budget. Call every frame.</summary>
-        public void Tick(int mask, Vector3 mcPlayer)
+        public void Tick(int mask, Vector3 mcPlayer, List<Vector3> interest)
         {
+            // Entity clusters (block coords). A changed set needs a new merged result.
+            bool changed = interest.Count != _interest.Count;
+            for (int i = 0; !changed && i < interest.Count; i++)
+                changed = Floor(interest[i]) != _interest[i];
+            if (changed)
+            {
+                _interest.Clear();
+                foreach (Vector3 p in interest) _interest.Add(Floor(p));
+                _interestCenter = 0;
+                _interestScan = 0;
+                _dirty = true;
+            }
+
             _mask = mask;
             if (_puppet.MappingGeneration != _generation)
             {
@@ -129,8 +155,30 @@ namespace UltraCraft
                 if (_blocks.ContainsKey(key)) continue;
                 ProbeBlock(b.x, b.y, b.z, key);
             }
+
+            // Then the cubes around entity clusters, round-robin, nearest blocks first in each.
+            double until = _sw.Elapsed.TotalMilliseconds + InterestBudgetMs;
+            int visited = 0;
+            while (_interest.Count > 0 && visited < _interest.Count && _sw.Elapsed.TotalMilliseconds < until)
+            {
+                if (_interestCenter >= _interest.Count) _interestCenter = 0;
+                if (_interestScan >= _interestOffsets.Length)
+                {
+                    _interestScan = 0;
+                    _interestCenter++;
+                    visited++;
+                    continue;
+                }
+                Vector3Int b = _interest[_interestCenter] + _interestOffsets[_interestScan++];
+                long key = Key(b.x, b.y, b.z);
+                if (_blocks.ContainsKey(key)) continue;
+                ProbeBlock(b.x, b.y, b.z, key);
+            }
             ProbeMs += _sw.Elapsed.TotalMilliseconds;
         }
+
+        private static Vector3Int Floor(Vector3 p) =>
+            new Vector3Int(Mathf.FloorToInt(p.x), Mathf.FloorToInt(p.y), Mathf.FloorToInt(p.z));
 
         /// <summary>
         /// Append merged voxel boxes within <paramref name="radius"/> blocks of the player to
@@ -158,12 +206,22 @@ namespace UltraCraft
                 _collectCenter = center;
                 _lastRebuild = Time.unscaledTime;
                 var snapshot = new List<float[]>();
+                var taken = new HashSet<long>();
                 for (int i = 0; i < _offsets.Length; i++)
                 {
                     Vector3Int b = center + _offsets[i];
-                    if (_blocks.TryGetValue(Key(b.x, b.y, b.z), out Block blk) && blk.Boxes != null)
+                    long k = Key(b.x, b.y, b.z);
+                    if (taken.Add(k) && _blocks.TryGetValue(k, out Block blk) && blk.Boxes != null)
                         snapshot.Add(blk.Boxes);
                 }
+                foreach (Vector3Int ic in _interest)
+                    for (int i = 0; i < _interestOffsets.Length; i++)
+                    {
+                        Vector3Int b = ic + _interestOffsets[i];
+                        long k = Key(b.x, b.y, b.z);
+                        if (taken.Add(k) && _blocks.TryGetValue(k, out Block blk) && blk.Boxes != null)
+                            snapshot.Add(blk.Boxes);
+                    }
                 uint gen = _generation;
                 _rebuild = Task.Run(() => Merge(snapshot, gen));
             }
@@ -182,13 +240,21 @@ namespace UltraCraft
         public void Invalidate(Vector3 mcMin, Vector3 mcMax)
         {
             if (_blocks.Count == 0) return;
-            // Only blocks the scan can reach matter; clamp a huge collider to that cube.
-            int x0 = Math.Max(Mathf.FloorToInt(mcMin.x), _scanCenter.x - RadiusH);
-            int x1 = Math.Min(Mathf.FloorToInt(mcMax.x), _scanCenter.x + RadiusH);
-            int y0 = Math.Max(Mathf.FloorToInt(mcMin.y), _scanCenter.y - RadiusV);
-            int y1 = Math.Min(Mathf.FloorToInt(mcMax.y), _scanCenter.y + RadiusV);
-            int z0 = Math.Max(Mathf.FloorToInt(mcMin.z), _scanCenter.z - RadiusH);
-            int z1 = Math.Min(Mathf.FloorToInt(mcMax.z), _scanCenter.z + RadiusH);
+            // Only blocks the scans can reach matter; clamp a huge collider to the cube around
+            // the player and the entity clusters.
+            int sx0 = _scanCenter.x - RadiusH, sx1 = _scanCenter.x + RadiusH;
+            int sy0 = _scanCenter.y - RadiusV, sy1 = _scanCenter.y + RadiusV;
+            int sz0 = _scanCenter.z - RadiusH, sz1 = _scanCenter.z + RadiusH;
+            foreach (Vector3Int ic in _interest)
+            {
+                sx0 = Math.Min(sx0, ic.x - InterestR); sx1 = Math.Max(sx1, ic.x + InterestR);
+                sy0 = Math.Min(sy0, ic.y - InterestR); sy1 = Math.Max(sy1, ic.y + InterestR);
+                sz0 = Math.Min(sz0, ic.z - InterestR); sz1 = Math.Max(sz1, ic.z + InterestR);
+            }
+            int x0 = Math.Max(Mathf.FloorToInt(mcMin.x), sx0), x1 = Math.Min(Mathf.FloorToInt(mcMax.x), sx1);
+            int y0 = Math.Max(Mathf.FloorToInt(mcMin.y), sy0), y1 = Math.Min(Mathf.FloorToInt(mcMax.y), sy1);
+            int z0 = Math.Max(Mathf.FloorToInt(mcMin.z), sz0), z1 = Math.Min(Mathf.FloorToInt(mcMax.z), sz1);
+            if ((long)(x1 - x0 + 1) * (y1 - y0 + 1) * (z1 - z0 + 1) > 400000) return;   // pathological
             int removed = 0;
             for (int x = x0; x <= x1; x++)
             for (int y = y0; y <= y1; y++)
@@ -205,6 +271,7 @@ namespace UltraCraft
                 Invalidations += removed;
                 _dirty = true;
                 _scanIndex = 0;     // resume the nearest-first scan so the gap refills first
+                _interestScan = 0;
             }
         }
 
@@ -362,9 +429,13 @@ namespace UltraCraft
             foreach (var kv in _blocks)
             {
                 Block b = kv.Value;
-                if (Math.Abs(b.X - center.x) > RadiusH * 2 || Math.Abs(b.Y - center.y) > RadiusV * 2
-                    || Math.Abs(b.Z - center.z) > RadiusH * 2)
-                    drop.Add(kv.Key);
+                if (Math.Abs(b.X - center.x) <= RadiusH * 2 && Math.Abs(b.Y - center.y) <= RadiusV * 2
+                    && Math.Abs(b.Z - center.z) <= RadiusH * 2) continue;
+                bool nearEntities = false;
+                foreach (Vector3Int ic in _interest)
+                    if (Math.Abs(b.X - ic.x) <= InterestR * 2 && Math.Abs(b.Y - ic.y) <= InterestR * 2
+                        && Math.Abs(b.Z - ic.z) <= InterestR * 2) { nearEntities = true; break; }
+                if (!nearEntities) drop.Add(kv.Key);
             }
             foreach (long k in drop)
             {
