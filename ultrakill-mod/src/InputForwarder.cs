@@ -141,7 +141,41 @@ namespace UltraCraft
             }
         }
 
-        private void PushKey(int scancode, int action, int mods) => PushEvent(Protocol.EventKind.KEY, scancode, action | (mods << 8));
+        private void PushKey(int scancode, int action, int mods) =>
+            PushEvent(Protocol.EventKind.KEY, SdlKeycode(scancode), action | (mods << 8) | (scancode << 22));
+
+        /// <summary>
+        /// The SDL keycode for a scancode, which Minecraft's text editing switches on (EditBox:
+        /// shortcutKey() 8 = Backspace, 127 = Delete, 0x4000004F = Right, ...; verified with javap).
+        /// SDL's rule: printable keys are their character (US layout), the rest scancode | 1 << 30.
+        /// </summary>
+        private static int SdlKeycode(int sc)
+        {
+            if (sc >= 4 && sc <= 29) return 'a' + (sc - 4);
+            if (sc >= 30 && sc <= 38) return '1' + (sc - 30);
+            switch (sc)
+            {
+                case 39: return '0';
+                case 40: return 13;    // Return
+                case 41: return 27;    // Escape
+                case 42: return 8;     // Backspace
+                case 43: return 9;     // Tab
+                case 44: return ' ';
+                case 45: return '-';
+                case 46: return '=';
+                case 47: return '[';
+                case 48: return ']';
+                case 49: return '\\';
+                case 51: return ';';
+                case 52: return '\'';
+                case 53: return '`';
+                case 54: return ',';
+                case 55: return '.';
+                case 56: return '/';
+                case 76: return 127;   // Delete
+                default: return sc | (1 << 30);
+            }
+        }
 
         private void PushEvent(Protocol.EventKind kind, int a, int b)
         {

@@ -60,11 +60,14 @@ public final class GuiCapture implements VertexConsumer {
 
     // ---- frame ----------------------------------------------------------------
 
-    /** Only while a live ULTRAKILL is on the bridge: nothing to capture for otherwise (and it skips startup). */
+    /**
+     * Only while a live ULTRAKILL is on the bridge (it skips startup) and Minecraft is in a world:
+     * its title screen and world list are not ULTRAKILL's to show. Otherwise an empty table goes out.
+     */
     public void begin() {
         n = 0;
         queuedItems.clear();
-        capturing = dev.ultracraft.UltraCraftClient.ukLive();
+        capturing = dev.ultracraft.UltraCraftClient.ukLive() && Minecraft.getInstance().level != null;
     }
 
     public void end(Bridge bridge) {
@@ -109,11 +112,35 @@ public final class GuiCapture implements VertexConsumer {
             GuiItemRenderState item = queuedItems.remove(key(b.x0(), b.y0(), b.pose()));
             if (item != null) { item(mc, item); return; }
         }
+        if (!plainBlend(e.pipeline())) return;
         int k = GuiTextures.key(mc, e.textureSetup().texure0());
         skip = k < 0;
         curTex = Math.max(k, 0);
         e.buildVertices(this);
         skip = false;
+    }
+
+    private final java.util.Set<Object> skippedPipelines = new java.util.HashSet<>();
+
+    /**
+     * ULTRAKILL replays every quad with plain alpha blending. Elements Minecraft blends otherwise
+     * (the vignette multiplies the screen darker; replayed as alpha it is an opaque full-screen
+     * sheet) are left out rather than drawn wrong. Invert (the crosshair) reads fine as alpha.
+     */
+    private boolean plainBlend(com.mojang.renderpearl.api.pipeline.RenderPipeline p) {
+        var targets = p.getColorTargetStates();
+        if (targets.isEmpty()) return true;
+        var blend = targets.get(0).blendFunction();
+        if (blend.isEmpty()) return true;
+        var f = blend.get();
+        if (f.equals(com.mojang.renderpearl.api.pipeline.BlendFunction.TRANSLUCENT)
+                || f.equals(com.mojang.renderpearl.api.pipeline.BlendFunction.TRANSLUCENT_PREMULTIPLIED_ALPHA)
+                || f.equals(com.mojang.renderpearl.api.pipeline.BlendFunction.INVERT)) return true;
+        if (skippedPipelines.add(p.getLocation())) {
+            org.slf4j.LoggerFactory.getLogger("ultracraft").info("[UltraCraft] gui: pipeline {} blends {}; its quads are skipped",
+                    p.getLocation(), f);
+        }
+        return false;
     }
 
     // ---- VertexConsumer: Minecraft's GUI quads ---------------------------------

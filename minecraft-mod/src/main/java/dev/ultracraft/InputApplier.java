@@ -363,23 +363,17 @@ final class InputApplier {
      * inventory, Esc (ULTRAKILL's ~) the pause menu, and inside a screen every key and typed
      * character reaches it, exactly as from Minecraft's own window.
      */
-    private int eventsLogged;   // DIAGNOSTIC (2026-10-13: "none of the buttons work")
-
     private void applyEvents(Minecraft mc) {
         long handle = mc.getWindow().handle();
         for (int i = 0; i < 256; i++) {
             Bridge.Event e = bridge.popEvent();
             if (e == null) return;
             try {
-                var before = mc.gui.screen();
-                if (eventsLogged < 60) {
-                    eventsLogged++;
-                    LOG.info("[UltraCraft] keys: event kind={} a={} b={} screen={}", e.kind, e.a, e.b,
-                            before == null ? "none" : before.getClass().getSimpleName());
-                }
                 if (e.kind == Protocol.EV_KEY) {
+                    // KeyEvent(scancode, SDL keycode, modifiers): bindings and isEscape read the
+                    // scancode, text editing reads the keycode (shortcutKey); see generate.py.
                     mc.keyboardHandler.keyPress(handle, e.b & 0xFF,
-                            new net.minecraft.client.input.KeyEvent(e.a, 0, e.b >>> 8));
+                            new net.minecraft.client.input.KeyEvent((e.b >>> 22) & 0xFF, e.a, (e.b >>> 8) & 0x3FFF));
                 } else if (e.kind == Protocol.EV_CHAR) {
                     mc.keyboardHandler.charTyped(handle, new net.minecraft.client.input.CharacterEvent(e.a));
                 }
