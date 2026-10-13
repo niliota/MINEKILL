@@ -20,7 +20,15 @@ public final class ProjectileClip {
     private ProjectileClip() {}
 
     public static BlockHitResult clip(Level level, ClipContext ctx) {
-        BlockHitResult mc = level.clipIncludingBorder(ctx);
+        return nearer(level.clipIncludingBorder(ctx), ctx);
+    }
+
+    /** Same, for {@code Level.clip} callers (what the player aims a bucket, boat, ... at). */
+    public static BlockHitResult clipNoBorder(Level level, ClipContext ctx) {
+        return nearer(level.clip(ctx), ctx);
+    }
+
+    private static BlockHitResult nearer(BlockHitResult mc, ClipContext ctx) {
         if (!UkCollision.hasShapes()) return mc;
         Vec3 from = ctx.getFrom(), to = ctx.getTo();
         UkCollision.RayHit h = UkCollision.raycast(from, to);

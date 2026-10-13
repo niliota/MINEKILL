@@ -17,4 +17,14 @@ public abstract class AbstractArrowMixin {
     private BlockHitResult ultracraft$clip(Level level, ClipContext ctx) {
         return ProjectileClip.clip(level, ctx);
     }
+
+    /**
+     * A stuck arrow falls when no collision is left around its tip, and that test only sees
+     * Minecraft blocks: arrows stuck in ULTRAKILL walls dropped and swung round to point down.
+     */
+    @Redirect(method = "shouldFall", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/world/level/Level;noCollision(Lnet/minecraft/world/phys/AABB;)Z"))
+    private boolean ultracraft$noCollision(Level level, net.minecraft.world.phys.AABB box) {
+        return level.noCollision(box) && !(dev.ultracraft.UkCollision.hasShapes() && dev.ultracraft.UkCollision.intersectsAny(box));
+    }
 }

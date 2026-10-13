@@ -30,7 +30,9 @@
     "PathNavigationMixin",
     "GoalUtilsMixin",
     "AbstractArrowMixin",
-    "ProjectileUtilMixin"
+    "ProjectileUtilMixin",
+    "ItemMixin",
+    "FlowingFluidMixin"
   ],
   "injectors": {
     "defaultRequire": 1
