@@ -33,7 +33,8 @@
     "ProjectileUtilMixin",
     "ItemMixin",
     "FlowingFluidMixin",
-    "ProjectileMixin"
+    "ProjectileMixin",
+    "InputConstantsMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -352,6 +352,9 @@ namespace Minekill.Bridge
         public const uint KEY_JUMP = 16u;
         public const uint KEY_SNEAK = 32u;
         public const uint KEY_SPRINT = 64u;
+        public const uint KEY_MOD_SHIFT = 256u;
+        public const uint KEY_MOD_CTRL = 512u;
+        public const uint KEY_MOD_ALT = 1024u;
 
         // Event kinds, shared with the Java side.
         public enum EventKind : uint

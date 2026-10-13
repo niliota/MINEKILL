@@ -411,6 +411,9 @@ public final class Protocol {
     public static final int KEY_JUMP = 16;
     public static final int KEY_SNEAK = 32;
     public static final int KEY_SPRINT = 64;
+    public static final int KEY_MOD_SHIFT = 256;
+    public static final int KEY_MOD_CTRL = 512;
+    public static final int KEY_MOD_ALT = 1024;
 
     // Event kinds, shared with the C# side.
     public static final int EV_BLOCK_PLACED = 1;

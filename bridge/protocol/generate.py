@@ -483,6 +483,11 @@ KEY_FLAGS = {
     "KEY_SNEAK":    1 << 5,
     "KEY_SPRINT":   1 << 6,
     # 1 << 7 was the H lock toggle (removed: spawn sync and the void net made it unnecessary).
+    # Modifier keys held in ULTRAKILL (either side), for Minecraft's modifier checks: the
+    # modifiers of forwarded clicks (shift-click, ...) and InputConstants.isKeyDown.
+    "KEY_MOD_SHIFT": 1 << 8,
+    "KEY_MOD_CTRL":  1 << 9,
+    "KEY_MOD_ALT":   1 << 10,
 }
 
 EVENT_KINDS = {
