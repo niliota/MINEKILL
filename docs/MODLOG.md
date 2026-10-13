@@ -2444,3 +2444,5 @@ User confirmed: everything works after the rename.
   detected through ntdll's `wine_get_version` export (`Platform.IsWine`); on Windows the file is
   opened shared (ReadWrite|Delete) and mapped through that handle (`Platform.MapShared`); under
   Wine the old path is unchanged. Untested on Windows.
+
+User confirmed: still connects on Linux with the Windows-aware path and mapping code.

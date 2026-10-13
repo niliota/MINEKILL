@@ -59,9 +59,12 @@ namespace Minekill.Bridge
         /// </summary>
         public static string DefaultPath()
         {
-            // Z: existing at all is the signal that we are under Wine on Linux.
-            if (!System.IO.Directory.Exists("Z:\\")) return DefaultFileName;
-            return @"Z:\var\tmp\" + DefaultFileName;
+            if (Platform.IsWine) return @"Z:\var\tmp\" + DefaultFileName;
+            // Native Windows: both games run as the same user, and Minecraft's side asks
+            // for the same folder (%LOCALAPPDATA%\MINEKILL).
+            string dir = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MINEKILL");
+            return System.IO.Path.Combine(dir, DefaultFileName);
         }
 
         // header field offsets, from Protocol's Header layout
@@ -140,9 +143,7 @@ namespace Minekill.Bridge
                         grow.SetLength(Protocol.TOTAL_SIZE);
                 }
 
-                _mmf = MemoryMappedFile.CreateFromFile(_path, FileMode.OpenOrCreate, null,
-                                                      Protocol.TOTAL_SIZE,
-                                                      MemoryMappedFileAccess.ReadWrite);
+                _mmf = Platform.MapShared(_path, Protocol.TOTAL_SIZE);
                 _view = _mmf.CreateViewAccessor(0, Protocol.TOTAL_SIZE,
                                                 MemoryMappedFileAccess.ReadWrite);
 

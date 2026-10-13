@@ -53,9 +53,16 @@ public final class Bridge implements AutoCloseable {
      * <p>A RELATIVE default would also be wrong: each process resolves it against its
      * own working directory, so the two would quietly open different files.
      *
-     * @return {@code /var/tmp/minekill.bridge}
+     * <p>On native Windows (both games native) there is no Wine boundary: both run as the same
+     * user and use {@code %LOCALAPPDATA%\MINEKILL\minekill.bridge}, which the ULTRAKILL side
+     * picks the same way.
+     *
+     * @return {@code /var/tmp/minekill.bridge}, or the Windows path above
      */
     public static String defaultPath() {
+        String local = System.getenv("LOCALAPPDATA");
+        if (System.getProperty("os.name", "").startsWith("Windows") && local != null && !local.isEmpty())
+            return Paths.get(local, "MINEKILL", DEFAULT_FILE_NAME).toString();
         return "/var/tmp/" + DEFAULT_FILE_NAME;
     }
 

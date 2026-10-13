@@ -46,8 +46,7 @@ namespace Minekill.Bridge
                     using (var fs = new FileStream(Path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite))
                         fs.SetLength(Protocol.STREAM_TOTAL_SIZE);
                 }
-                _mmf = MemoryMappedFile.CreateFromFile(Path, FileMode.OpenOrCreate, null,
-                                                      Protocol.STREAM_TOTAL_SIZE, MemoryMappedFileAccess.ReadWrite);
+                _mmf = Platform.MapShared(Path, Protocol.STREAM_TOTAL_SIZE);
                 _view = _mmf.CreateViewAccessor(0, Protocol.STREAM_TOTAL_SIZE, MemoryMappedFileAccess.ReadWrite);
 
                 if (_view.ReadUInt32(Protocol.STREAM_OFF_MAGIC) == 0)
