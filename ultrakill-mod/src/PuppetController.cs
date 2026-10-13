@@ -703,6 +703,40 @@ namespace UltraCraft
         /// because every later frame is a delta from the anchor. Waiting one LateUpdate
         /// costs one frame after a level load and makes the anchor mean what it says.
         /// </summary>
+        /// <summary>
+        /// Anchor the feet on the floor under the spawn, not on the capsule's bottom. The capsule
+        /// is caught at whatever height ULTRAKILL's level start leaves it (its height animates, and
+        /// the player may still be dropping in): one session logged feet offsets from -0.74 to
+        /// -1.50 units and anchors 0.8 units apart on the same level, so the Minecraft world sat at
+        /// a different height after each reset (user: "every time I reset the level occasionally
+        /// the blocks move about"). The floor itself is the same every time. Minecraft's player is
+        /// held at spawn while this happens, so spawn maps exactly onto that floor. Only the
+        /// vertical part changes; with no floor within 3 blocks the capsule measurement stands.
+        /// </summary>
+        private void SnapFeetToFloor()
+        {
+            try
+            {
+                Vector3 from = _rb.position + Vector3.up * (0.5f * _scale);
+                float reach = 0.5f * _scale - _ukFeetOffset.y + 3f * _scale;
+                if (Physics.Raycast(from, Vector3.down, out RaycastHit hit, reach,
+                                    LayerMaskDefaults.Get(LMD.Environment), QueryTriggerInteraction.Ignore))
+                {
+                    float was = _ukFeetOffset.y;
+                    _ukFeetOffset.y = hit.point.y - _rb.position.y;
+                    _log.LogInfo($"puppet: feet anchored on the floor under spawn ('{hit.collider.name}'): offset {was:F3} -> {_ukFeetOffset.y:F3} units");
+                }
+                else
+                {
+                    _log.LogInfo("puppet: no floor within 3 blocks under spawn; keeping the capsule's feet offset");
+                }
+            }
+            catch (Exception e)
+            {
+                _log.LogWarning($"puppet: floor snap failed: {e.Message}");
+            }
+        }
+
         private Vector3 MeasureFeetOffset()
         {
             try
@@ -852,6 +886,7 @@ namespace UltraCraft
 
             _mcOrigin = new Vector3(p.posX, p.posY, p.posZ);
             _ukFeetOffset = MeasureFeetOffset();
+            SnapFeetToFloor();
             _generation++;
             // Every anchor samples its own bases (after ApplyLook turns the camera to the new
             // anchor heading). Keeping a previous level's cache was the latent half of the

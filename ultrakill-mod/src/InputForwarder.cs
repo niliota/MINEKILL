@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UltraCraft.Bridge;
@@ -85,7 +86,10 @@ namespace UltraCraft
         }
 
         /// <summary>Outside Minecraft screens, only these go to Minecraft as key events.</summary>
-        private static readonly KeyCode[] GameplayKeys = { KeyCode.T, KeyCode.Slash, KeyCode.E, KeyCode.Q, KeyCode.BackQuote, KeyCode.F5 };
+        private static readonly KeyCode[] GameplayKeys = { KeyCode.T, KeyCode.Slash, KeyCode.E, KeyCode.Q, KeyCode.BackQuote, KeyCode.F5, KeyCode.F3 };
+
+        /// <summary>Keys sent down to Minecraft as F3 combinations, released to it when they come up.</summary>
+        private readonly HashSet<KeyCode> _comboDown = new HashSet<KeyCode>();
         /// <summary>Held editing keys repeat inside screens, like typing in Minecraft's own window.</summary>
         private static readonly KeyCode[] RepeatKeys =
             { KeyCode.Backspace, KeyCode.Delete, KeyCode.LeftArrow, KeyCode.RightArrow, KeyCode.UpArrow, KeyCode.DownArrow };
@@ -138,7 +142,25 @@ namespace UltraCraft
                     if (UnityEngine.Input.GetKeyDown(k)) PushKey(code, 1, mods);
                     if (UnityEngine.Input.GetKeyUp(k)) PushKey(code, 0, mods);
                 }
+                // F3 combinations (F3+B hitboxes, F3+G chunk borders, F3+H tooltips, ...): while F3
+                // is held every key goes to Minecraft, which reads F3 from its own key mapping and
+                // then skips toggling the overlay on release, as with a real keyboard.
+                if (Held(KeyCode.F3))
+                    foreach (var kv in SdlKeys)
+                        if (kv.Key != KeyCode.F3 && System.Array.IndexOf(GameplayKeys, kv.Key) < 0 && UnityEngine.Input.GetKeyDown(kv.Key))
+                        {
+                            PushKey(kv.Value, 1, mods);
+                            _comboDown.Add(kv.Key);
+                        }
             }
+            // Every combination key Minecraft saw go down also sees it come up, F3 held or not.
+            if (_comboDown.Count > 0)
+                foreach (KeyCode k in new List<KeyCode>(_comboDown))
+                    if (!Held(k)) { PushKey(SdlKeys[k], 0, mods); _comboDown.Remove(k); }
+
+            // Middle click (pick block; clone stack in creative screens), in and out of screens.
+            if (UnityEngine.Input.GetMouseButtonDown(2)) PushEvent(Protocol.EventKind.MOUSE_BUTTON, 2, 1);
+            if (UnityEngine.Input.GetMouseButtonUp(2)) PushEvent(Protocol.EventKind.MOUSE_BUTTON, 2, 0);
         }
 
         private void PushKey(int scancode, int action, int mods) =>

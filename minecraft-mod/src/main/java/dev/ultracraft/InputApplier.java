@@ -374,6 +374,9 @@ final class InputApplier {
                             new net.minecraft.client.input.KeyEvent((e.b >>> 22) & 0xFF, e.a, (e.b >>> 8) & 0x3FFF));
                 } else if (e.kind == Protocol.EV_CHAR) {
                     mc.keyboardHandler.charTyped(handle, new net.minecraft.client.input.CharacterEvent(e.a));
+                } else if (e.kind == Protocol.EV_MOUSE_BUTTON) {
+                    // Middle click: pick block in the world, clone stack in creative screens.
+                    forwardButton(mc, e.a, e.b == 1);
                 }
             } catch (Throwable t) {
                 LOG.warn("[UltraCraft] key event {} failed: {}", e.kind, t.toString());
