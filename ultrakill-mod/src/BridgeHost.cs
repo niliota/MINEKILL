@@ -101,6 +101,7 @@ namespace UltraCraft
                 return false;
             }
 
+            if (_bridge.Notice != null) Log.LogWarning(_bridge.Notice);
             Log.LogInfo($"bridge open at {file} (pid {_bridge.UkPid}, " +
                         $"{Protocol.TOTAL_SIZE} bytes, awaiting Minecraft pid {_bridge.McPid})");
             return true;

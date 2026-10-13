@@ -7,9 +7,9 @@ namespace UltraCraft.Bridge
     public static class Protocol
     {
         public const uint MAGIC = 0x55544C52u;
-        public const uint VERSION = 1u;
+        public const uint VERSION = 604791699u;   // layout fingerprint
         public const int HEADER_SIZE = 56;
-        public const int TOTAL_SIZE = 1200608;
+        public const int TOTAL_SIZE = 1659384;
         public const int SEQ_SIZE = 4;
 
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -33,17 +33,17 @@ namespace UltraCraft.Bridge
         public const int OFFSET_PLAYER = 56;
         public const int SLOTPLAYER_SIZE = 71;
         public const int OFFSET_CAMERA = 128;
-        public const int SLOTCAMERA_SIZE = 24;
-        public const int OFFSET_INPUT = 152;
+        public const int SLOTCAMERA_SIZE = 32;
+        public const int OFFSET_INPUT = 160;
         public const int SLOTINPUT_SIZE = 50;
-        public const int OFFSET_CORRECTION = 208;
+        public const int OFFSET_CORRECTION = 216;
         public const int SLOTCORRECTION_SIZE = 44;
-        public const int OFFSET_LEVEL = 256;
+        public const int OFFSET_LEVEL = 264;
         public const int SLOTLEVEL_SIZE = 60;
-        public const int OFFSET_SELECTION = 320;
+        public const int OFFSET_SELECTION = 328;
         public const int SLOTSELECTION_SIZE = 36;
-        public const int OFFSET_MC_EVENTS = 356;
-        public const int OFFSET_UK_EVENTS = 6508;
+        public const int OFFSET_MC_EVENTS = 364;
+        public const int OFFSET_UK_EVENTS = 6516;
 
         public const uint FLAG_UK_MOVEMENT = 1u << 0;
         public const uint FLAG_UK_PAUSED = 1u << 1;
@@ -85,6 +85,8 @@ namespace UltraCraft.Bridge
             public float pitch;            // Minecraft degrees
             public float fov;              // Minecraft FOV, for the debug overlay only
             public float eyeHeight;        // blocks from the feet to the eye, current pose (1.62 standing, lower sneaking)
+            public uint cameraType;        // F5 perspective: 0 first person, 1 third person behind, 2 third person in front
+            public float cameraDistance;   // third person: blocks from the eye to Minecraft's camera (already clipped by Minecraft's blocks)
             public uint seqEnd;     // must equal seq
         }
 
@@ -177,7 +179,7 @@ namespace UltraCraft.Bridge
             public RingMcEventsRecord[] records;      // 256 entries
         }
 
-        public const int RINGMCEVENTS_OFFSET = 356;
+        public const int RINGMCEVENTS_OFFSET = 364;
         public const int RINGMCEVENTS_CAPACITY = 256;
         public const int RINGMCEVENTS_RECORD_SIZE = 24;
         public const int RINGMCEVENTS_OFF_HEAD = 0;
@@ -202,7 +204,7 @@ namespace UltraCraft.Bridge
             public RingUkEventsRecord[] records;      // 256 entries
         }
 
-        public const int RINGUKEVENTS_OFFSET = 6508;
+        public const int RINGUKEVENTS_OFFSET = 6516;
         public const int RINGUKEVENTS_CAPACITY = 256;
         public const int RINGUKEVENTS_RECORD_SIZE = 24;
         public const int RINGUKEVENTS_OFF_HEAD = 0;
@@ -234,6 +236,7 @@ namespace UltraCraft.Bridge
         public const int GUI_TEX_GUI = 1;  // Minecraft's GUI atlas
         public const int GUI_TEX_BLOCKS = 2;  // block atlas
         public const int GUI_TEX_ITEMS = 3;  // item atlas
+        public const int MODEL_TEX_MULTIPLY = 16777216;  // WORLD_MODELS tex flag: multiply-blend decal (block-breaking cracks: Minecraft blends them as dst * src * 2)
         public const int GUI_TEX_DYNAMIC_BASE = 16;  // first key of textures mirrored through STREAM_MSG_TEXTURE (font sheets)
         public const int STREAM_ATLAS_ITEMS = 1;
         public const int STREAM_ATLAS_GUI = 2;
@@ -245,7 +248,7 @@ namespace UltraCraft.Bridge
         public const int STREAM_VTX_OFF_FLAGS = 24;  // u32: bits 0-3 block light, 8-11 sky light, 16 translucent, 17 cutout (neither = solid)
 
         // Tables: one seqlock over a header and a list of fixed-size records.
-        public const int TBL_COLLISION_OFFSET = 12664;  // ULTRAKILL -> Minecraft: ULTRAKILL collision boxes near the player, already in Minecraft block coords
+        public const int TBL_COLLISION_OFFSET = 12672;  // ULTRAKILL -> Minecraft: ULTRAKILL collision boxes near the player, already in Minecraft block coords
         public const int TBL_COLLISION_SIZE = 98328;
         public const int TBL_COLLISION_CAPACITY = 4096;
         public const int TBL_COLLISION_OFF_SEQ = 0;  // seqlock, odd while writing
@@ -260,7 +263,7 @@ namespace UltraCraft.Bridge
         public const int TBL_COLLISION_REC_OFF_MAXX = 12;
         public const int TBL_COLLISION_REC_OFF_MAXY = 16;
         public const int TBL_COLLISION_REC_OFF_MAXZ = 20;
-        public const int TBL_GUI_OFFSET = 110992;  // Minecraft -> ULTRAKILL: every quad Minecraft's GUI draws this frame (HUD, text, items), in draw order, for ULTRAKILL to replay
+        public const int TBL_GUI_OFFSET = 111000;  // Minecraft -> ULTRAKILL: every quad Minecraft's GUI draws this frame (HUD, text, items), in draw order, for ULTRAKILL to replay
         public const int TBL_GUI_SIZE = 786472;
         public const int TBL_GUI_CAPACITY = 32768;
         public const int TBL_GUI_OFF_SEQ = 0;  // seqlock, odd while writing
@@ -279,7 +282,7 @@ namespace UltraCraft.Bridge
         public const int TBL_GUI_REC_OFF_V = 12;
         public const int TBL_GUI_REC_OFF_RGBA = 16;  // colour, r in the low byte
         public const int TBL_GUI_REC_OFF_TEX = 20;  // GUI_TEX_* key
-        public const int TBL_HAND_OFFSET = 897464;  // Minecraft -> ULTRAKILL: Minecraft's first-person hands and held items this frame: posed, lit quads in Minecraft view space (camera looks down -z, y up), far first
+        public const int TBL_HAND_OFFSET = 897472;  // Minecraft -> ULTRAKILL: Minecraft's first-person hands and held items this frame: posed, lit quads in Minecraft view space (camera looks down -z, y up), far first
         public const int TBL_HAND_SIZE = 229400;
         public const int TBL_HAND_CAPACITY = 8192;
         public const int TBL_HAND_OFF_SEQ = 0;  // seqlock, odd while writing
@@ -295,7 +298,22 @@ namespace UltraCraft.Bridge
         public const int TBL_HAND_REC_OFF_V = 16;
         public const int TBL_HAND_REC_OFF_RGBA = 20;  // colour with lighting applied, r in the low byte
         public const int TBL_HAND_REC_OFF_TEX = 24;  // GUI_TEX_* key
-        public const int TBL_PARTICLES_OFFSET = 1126864;  // Minecraft -> ULTRAKILL: Minecraft's live block particles (TerrainParticle), interpolated, for ULTRAKILL to draw as billboards
+        public const int TBL_WORLD_MODELS_OFFSET = 1126872;  // Minecraft -> ULTRAKILL: posed model geometry in the world this frame (the player in third person, block-breaking cracks), unlit, in Minecraft block coords
+        public const int TBL_WORLD_MODELS_SIZE = 458768;
+        public const int TBL_WORLD_MODELS_CAPACITY = 16384;
+        public const int TBL_WORLD_MODELS_OFF_SEQ = 0;  // seqlock, odd while writing
+        public const int TBL_WORLD_MODELS_OFF_TICKTIMESTAMP = 4;  // epoch ms of the frame
+        public const int TBL_WORLD_MODELS_OFF_COUNT = 12;  // valid vertices; 4 per quad, counter-clockwise front as in Minecraft
+        public const int TBL_WORLD_MODELS_OFF_RECORDS = 16;
+        public const int TBL_WORLD_MODELS_RECORD_SIZE = 28;
+        public const int TBL_WORLD_MODELS_REC_OFF_X = 0;  // Minecraft block coords
+        public const int TBL_WORLD_MODELS_REC_OFF_Y = 4;
+        public const int TBL_WORLD_MODELS_REC_OFF_Z = 8;
+        public const int TBL_WORLD_MODELS_REC_OFF_U = 12;  // texture coordinates
+        public const int TBL_WORLD_MODELS_REC_OFF_V = 16;
+        public const int TBL_WORLD_MODELS_REC_OFF_RGBA = 20;  // tint, r in the low byte
+        public const int TBL_WORLD_MODELS_REC_OFF_TEX = 24;  // GUI_TEX_* key
+        public const int TBL_PARTICLES_OFFSET = 1585640;  // Minecraft -> ULTRAKILL: Minecraft's live block particles (TerrainParticle), interpolated, for ULTRAKILL to draw as billboards
         public const int TBL_PARTICLES_SIZE = 73744;
         public const int TBL_PARTICLES_CAPACITY = 2048;
         public const int TBL_PARTICLES_OFF_SEQ = 0;  // seqlock, odd while writing

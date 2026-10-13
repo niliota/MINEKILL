@@ -2235,3 +2235,65 @@ hand quads now drop back faces (counter-clockwise front, as GL culls) and sort b
 the eye. Also removed the local username from docs and comments.
 
 User confirmed: held items render correctly; H lock removal, hands and the inventory player model all good.
+
+### F5 perspective and block-breaking cracks
+
+- **F5** is forwarded to Minecraft (its own keyTogglePerspective cycles the camera). CAMERA gains
+  `cameraType` (0 first, 1 behind, 2 front) and `cameraDistance` (Minecraft's eye-to-camera
+  distance, already clipped by its blocks). PuppetController.ThirdPerson moves ULTRAKILL's camera
+  (the CameraController object itself) behind or in front of the eye, sphere-casting against
+  ULTRAKILL's Environment layers with Minecraft's 0.1-block margin; the front view turns it 180
+  degrees about its own up axis (= yaw + 180, pitch mirrored). Rotation is rebuilt by
+  CameraController every frame, so the yaw/pitch mapping is untouched; Minecraft aims from the eye.
+- **WORLD_MODELS table** (16384 vertices, Minecraft block coords, unlit): `render/WorldModels`
+  fills it every frame with (a) the player's body in third person, via
+  `EntityRenderDispatcher.extractEntity` + `submit` at its world position into a ModelCollector,
+  and (b) cracks: LevelRendererMixin copies `blockBreakingRenderStates` at the head of
+  `submitBlockDestroyAnimation`; each breaking block's model quads are lifted 0.002 blocks along
+  their face and textured with `textures/block/destroy_stage_N.png`, UVs laid over the face like
+  Minecraft's sheeted decal. ULTRAKILL builds one mesh under the world root (sections' triangle
+  order), one submesh per texture with a clone of the vertex-lit cutout material.
+
+User: keys dead again; cracks turn the block white; third-person skin not right (two-layer slim
+skin). Findings and fixes:
+- **Keys:** CAMERA grew by 8 bytes, which moved every ring and table after it. The bridge file
+  persists between runs, so the UK_EVENTS head/tail were read from inside an old record:
+  ULTRAKILL saw the ring as permanently full and dropped every key (the Minecraft tick log's
+  `dropped` counter climbing to 94). The header VERSION is now a fingerprint of the whole layout
+  (generate.py `layout_fingerprint`); whichever game opens a file laid out by another build wipes
+  and re-lays it, and logs that it did.
+- **Cracks:** destroy_stage PNGs are dark/light grey on a white background with alpha 1/255,
+  which Minecraft multiplies in (dst * src * 2). WORLD_MODELS tex keys can carry
+  MODEL_TEX_MULTIPLY (1 << 24); ULTRAKILL draws those with "ULTRAKILL/Legacy Shaders/Particles/
+  Multiply (Double)" and a half-grey vertex colour, which works out to exactly dst * tex * 2.
+- **Skin:** the downloaded skin is a normal 64x64 slim skin with hat and outer layers. Not yet
+  explained; WorldModels now logs every submitted model (render type, texture key, tint, quads)
+  on each switch into third person.
+
+User: keys back. Holding left click froze ULTRAKILL until the block broke; cracks invisible;
+third-person outer skin layer draws its transparent pixels as opaque black (body alone is fine).
+- **Freeze:** `Shader.Find` returned null for both multiply shaders (they are loaded but not
+  "always included"), so every frame with a crack logged "crack shader MISSING" and threw from
+  `new Material(null)` (21,687 log lines in one session). The crack shader is now looked up once
+  among `Resources.FindObjectsOfTypeAll<Shader>()`, falling back to alpha blending; with no
+  shader at all, crack quads are skipped instead of throwing.
+- **Outer layer:** the body report shows one `entity_translucent` PlayerModel submission (72
+  quads, the downloaded skin), so both layers do arrive. The vertex-lit cutout is a clone of an
+  opaque Master material with ALPHA_TEST switched on, but it kept the opaque material's alpha
+  threshold, so nothing was discarded. Every cutoff-like property of the Master shader is now set
+  from the cutout material (or 0.1); the shader's property names are logged once.
+
+User: cracks perfect (done). Outer skin layer still opaque black. The Master shader's property list
+(logged) has no cutoff at all: its alpha test exists only as compiled variants (ALPHA_TEST), and the
+lit cutout asks for ALPHA_TEST together with VERTEX_LIGHTING, a combination apparently not compiled,
+so Unity picks a variant that never discards. Models now use a clone of a material ULTRAKILL itself
+alpha-tests with (vertex-lit if one exists, otherwise e.g. an enemy's cutout material), cleaned of
+level effects. The dead cutoff-property code was removed.
+
+User also reports Minecraft-side ground ~1 block lower for the last few commits. Diffs of every
+commit since the HUD touch no mapping code (WorldMesher only gained atlas/sprite sends; McWorldView
+only textures; PlayerSafety only lost the H lock). The anchor's measured feet offset does vary
+between anchors (-1.500 and -1.177 units in one session), but that is ~0.17 blocks. Asked the user
+which ground and how it shows.
+
+User confirmed: F5 (both views, camera clipping), third-person body with transparent outer layer, cracks, and keys all work. The ground offset comes and goes between level resets (anchor-time measurement), not from a code change.

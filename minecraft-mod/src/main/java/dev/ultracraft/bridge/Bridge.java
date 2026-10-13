@@ -121,6 +121,16 @@ public final class Bridge implements AutoCloseable {
         buf = channel.map(FileChannel.MapMode.READ_WRITE, 0, Protocol.TOTAL_SIZE);
         buf.order(ByteOrder.LITTLE_ENDIAN);
 
+        int found = buf.getInt(H_VERSION);
+        if (buf.getInt(H_MAGIC) != 0 && found != Protocol.VERSION) {
+            // Laid out by another build (VERSION is a fingerprint of the layout): its ring
+            // counters and slots sit at old offsets and read as garbage here. Wipe and re-lay.
+            for (int off = 0; off + 8 <= Protocol.TOTAL_SIZE; off += 8) buf.putLong(off, 0L);
+            for (int off = Protocol.TOTAL_SIZE & ~7; off < Protocol.TOTAL_SIZE; off++) buf.put(off, (byte) 0);
+            org.slf4j.LoggerFactory.getLogger("ultracraft").info(
+                    "[UltraCraft] bridge file was laid out by another build (version {}, this build {}): wiped and re-laid",
+                    found, Protocol.VERSION);
+        }
         if (buf.getInt(H_MAGIC) == 0) {
             // Fresh file: lay down the header ourselves.
             buf.putInt(H_MAGIC, Protocol.MAGIC);
@@ -447,6 +457,9 @@ public final class Bridge implements AutoCloseable {
         public float yaw, pitch, fov;
         /** Blocks from feet to eye in the current pose; the origin of Minecraft's crosshair ray. */
         public float eyeHeight;
+        /** F5: 0 first person, 1 behind, 2 in front; and the eye-to-camera distance in blocks. */
+        public int cameraType;
+        public float cameraDistance;
     }
 
     public boolean readCamera(CameraState out) {
@@ -518,6 +531,29 @@ public final class Bridge implements AutoCloseable {
         }
         java.lang.invoke.VarHandle.releaseFence();
         endWrite(b + Protocol.TBL_GUI_OFF_SEQ);
+    }
+
+    /** Write the WORLD_MODELS table under its seqlock; same vertex layout as HAND. */
+    public void writeWorldModelsTable(long ts, int count, float[] xyz, float[] uv, int[] rgba, int[] tex) {
+        if (!connected) return;
+        if (count > Protocol.TBL_WORLD_MODELS_CAPACITY) count = Protocol.TBL_WORLD_MODELS_CAPACITY & ~3;
+        int b = Protocol.TBL_WORLD_MODELS_OFFSET;
+        beginWrite(b + Protocol.TBL_WORLD_MODELS_OFF_SEQ);
+        buf.putLong(b + Protocol.TBL_WORLD_MODELS_OFF_TICKTIMESTAMP, ts);
+        buf.putInt(b + Protocol.TBL_WORLD_MODELS_OFF_COUNT, count);
+        int r0 = b + Protocol.TBL_WORLD_MODELS_OFF_RECORDS;
+        for (int i = 0; i < count; i++) {
+            int at = r0 + i * Protocol.TBL_WORLD_MODELS_RECORD_SIZE;
+            buf.putFloat(at + Protocol.TBL_WORLD_MODELS_REC_OFF_X, xyz[i * 3]);
+            buf.putFloat(at + Protocol.TBL_WORLD_MODELS_REC_OFF_Y, xyz[i * 3 + 1]);
+            buf.putFloat(at + Protocol.TBL_WORLD_MODELS_REC_OFF_Z, xyz[i * 3 + 2]);
+            buf.putFloat(at + Protocol.TBL_WORLD_MODELS_REC_OFF_U, uv[i * 2]);
+            buf.putFloat(at + Protocol.TBL_WORLD_MODELS_REC_OFF_V, uv[i * 2 + 1]);
+            buf.putInt(at + Protocol.TBL_WORLD_MODELS_REC_OFF_RGBA, rgba[i]);
+            buf.putInt(at + Protocol.TBL_WORLD_MODELS_REC_OFF_TEX, tex[i]);
+        }
+        java.lang.invoke.VarHandle.releaseFence();
+        endWrite(b + Protocol.TBL_WORLD_MODELS_OFF_SEQ);
     }
 
     /**
@@ -622,6 +658,8 @@ public final class Bridge implements AutoCloseable {
         buf.putFloat(at + Protocol.SlotCamera.OFF_PITCH, c.pitch);
         buf.putFloat(at + Protocol.SlotCamera.OFF_FOV, c.fov);
         buf.putFloat(at + Protocol.SlotCamera.OFF_EYEHEIGHT, c.eyeHeight);
+        buf.putInt(at + Protocol.SlotCamera.OFF_CAMERATYPE, c.cameraType);
+        buf.putFloat(at + Protocol.SlotCamera.OFF_CAMERADISTANCE, c.cameraDistance);
         endWrite(at);
     }
 

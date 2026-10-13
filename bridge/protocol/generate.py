@@ -86,6 +86,8 @@ SLOTS = [
         ("pitch","f32", "Minecraft degrees"),
         ("fov","f32", "Minecraft FOV, for the debug overlay only"),
         ("eyeHeight","f32", "blocks from the feet to the eye, current pose (1.62 standing, lower sneaking)"),
+        ("cameraType","u32", "F5 perspective: 0 first person, 1 third person behind, 2 third person in front"),
+        ("cameraDistance","f32", "third person: blocks from the eye to Minecraft's camera (already clipped by Minecraft's blocks)"),
     ]),
     ("SlotInput", "INPUT", "ULTRAKILL -> Minecraft",
      "held keys and mouse delta, forwarded from the focused ULTRAKILL window", [
@@ -213,6 +215,19 @@ TABLES = [
         ("rgba","u32", "colour with lighting applied, r in the low byte"),
         ("tex","u32", "GUI_TEX_* key"),
      ]),
+    ("WORLD_MODELS", "Minecraft -> ULTRAKILL",
+     "posed model geometry in the world this frame (the player in third person, block-breaking cracks), unlit, in Minecraft block coords", 16384, [
+        ("tickTimestamp","i64", "epoch ms of the frame"),
+        ("count","u32", "valid vertices; 4 per quad, counter-clockwise front as in Minecraft"),
+     ], [
+        ("x","f32", "Minecraft block coords"),
+        ("y","f32", ""),
+        ("z","f32", ""),
+        ("u","f32", "texture coordinates"),
+        ("v","f32", ""),
+        ("rgba","u32", "tint, r in the low byte"),
+        ("tex","u32", "GUI_TEX_* key"),
+     ]),
     ("PARTICLES", "Minecraft -> ULTRAKILL",
      "Minecraft's live block particles (TerrainParticle), interpolated, for ULTRAKILL to draw as billboards", 2048, [
         ("tickTimestamp","i64", "epoch ms of the frame that sampled them"),
@@ -268,6 +283,7 @@ STREAM = [
     ("GUI_TEX_GUI", 1, "Minecraft's GUI atlas"),
     ("GUI_TEX_BLOCKS", 2, "block atlas"),
     ("GUI_TEX_ITEMS", 3, "item atlas"),
+    ("MODEL_TEX_MULTIPLY", 1 << 24, "WORLD_MODELS tex flag: multiply-blend decal (block-breaking cracks: Minecraft blends them as dst * src * 2)"),
     ("GUI_TEX_DYNAMIC_BASE", 16, "first key of textures mirrored through STREAM_MSG_TEXTURE (font sheets)"),
     ("STREAM_ATLAS_ITEMS", 1, ""),
     ("STREAM_ATLAS_GUI", 2, ""),
@@ -363,7 +379,7 @@ def emit_csharp(header_size, slots, rings, tables, total_size, path):
     w("    public static class Protocol")
     w("    {")
     w('        public const uint MAGIC = 0x55544C52u;')
-    w("        public const uint VERSION = 1u;")
+    w(f"        public const uint VERSION = {VERSION_VALUE}u;   // layout fingerprint")
     w(f"        public const int HEADER_SIZE = {header_size};")
     w(f"        public const int TOTAL_SIZE = {total_size};")
     w("        public const int SEQ_SIZE = 4;")
@@ -485,7 +501,7 @@ def emit_java(header_size, slots, rings, tables, total_size, path):
     w("")
     w("public final class Protocol {")
     w("    public static final int MAGIC = 0x55544C52;")
-    w("    public static final int VERSION = 1;")
+    w(f"    public static final int VERSION = {VERSION_VALUE};   // layout fingerprint")
     w(f"    public static final int HEADER_SIZE = {header_size};")
     w(f"    public static final int TOTAL_SIZE = {total_size};")
     w("    public static final int SEQ_SIZE = 4;")
@@ -675,10 +691,31 @@ def emit_doc(header_size, slots, rings, tables, total_size, path):
     open(path, "w").write("\n".join(L2))
 
 
+LAYOUT_VERSION = 1
+
+
+def layout_fingerprint(header_size, slots, rings, tables, total_size):
+    """The header's version: a fingerprint of the whole computed layout (every region's name,
+    offset and size, every field's name and type). A bridge file laid out by any other build
+    has a different one, and is wiped and re-laid on open: otherwise counters left at offsets
+    that moved read as garbage (2026-10-13: the key ring's head/tail landed on an old record,
+    so ULTRAKILL saw the ring as full forever and dropped every key)."""
+    import json, zlib
+    regions = []
+    for kind, items in (("slot", slots), ("ring", rings), ("table", tables)):
+        for r in items:
+            regions.append([kind, r["name"], r["offset"], r["total"],
+                            json.loads(json.dumps(r, default=str, sort_keys=True))])
+    text = json.dumps([LAYOUT_VERSION, header_size, total_size, regions], sort_keys=True, default=str)
+    return (zlib.crc32(text.encode()) & 0x7FFFFFFF) or 1
+
+
 def main():
+    global VERSION_VALUE
     here = os.path.dirname(os.path.abspath(__file__))
     root = os.path.abspath(os.path.join(here, "..", ".."))
     header_size, slots, rings, tables, total_size = compute_layout()
+    VERSION_VALUE = layout_fingerprint(header_size, slots, rings, tables, total_size)
 
     cs = os.path.join(root, "ultrakill-mod", "src", "Protocol.cs")
     java = os.path.join(root, "minecraft-mod", "src", "main", "java", "dev", "ultracraft", "bridge", "Protocol.java")
