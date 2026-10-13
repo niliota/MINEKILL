@@ -115,6 +115,44 @@ public final class UkCollision {
         injections++;   // racy across threads, which is fine for a rough counter
     }
 
+    /** A ray hit on an ULTRAKILL box: segment parameter t in [0,1], point, and the face's axis and sign. */
+    public record RayHit(double t, double x, double y, double z, int axis, int sign) {}
+
+    /**
+     * Nearest ULTRAKILL box the segment {@code from -> to} enters, or null. Slab test per box;
+     * a box the segment starts inside is skipped (the eye in a wall should not block the view).
+     * The face is the axis of the last slab entered, its sign the side it was entered from.
+     */
+    public static RayHit raycast(net.minecraft.world.phys.Vec3 from, net.minecraft.world.phys.Vec3 to) {
+        Snapshot s = current;
+        double[] o = {from.x, from.y, from.z};
+        double[] d = {to.x - from.x, to.y - from.y, to.z - from.z};
+        RayHit best = null;
+        for (AABB b : s.boxes) {
+            double[] mn = {b.minX, b.minY, b.minZ}, mx = {b.maxX, b.maxY, b.maxZ};
+            double tEnter = Double.NEGATIVE_INFINITY, tExit = Double.POSITIVE_INFINITY;
+            int axis = -1, sign = 0;
+            boolean miss = false;
+            for (int k = 0; k < 3 && !miss; k++) {
+                if (Math.abs(d[k]) < 1e-12) {
+                    if (o[k] <= mn[k] || o[k] >= mx[k]) miss = true;
+                    continue;
+                }
+                double t1 = (mn[k] - o[k]) / d[k], t2 = (mx[k] - o[k]) / d[k];
+                int sg = -1;                       // entering through the min face: normal points -k
+                if (t1 > t2) { double tmp = t1; t1 = t2; t2 = tmp; sg = 1; }
+                if (t1 > tEnter) { tEnter = t1; axis = k; sign = sg; }
+                if (t2 < tExit) tExit = t2;
+                if (tEnter > tExit) miss = true;
+            }
+            if (miss || axis < 0 || tEnter < 0 || tEnter > 1) continue;
+            if (best == null || tEnter < best.t()) {
+                best = new RayHit(tEnter, o[0] + d[0] * tEnter, o[1] + d[1] * tEnter, o[2] + d[2] * tEnter, axis, sign);
+            }
+        }
+        return best;
+    }
+
     /** True if any ULTRAKILL box overlaps {@code box} (strictly, like AABB.intersects). */
     public static boolean intersectsAny(AABB box) {
         for (AABB b : current.boxes) if (b.intersects(box)) return true;

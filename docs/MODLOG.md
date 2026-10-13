@@ -1844,3 +1844,77 @@ User: F11 keep the first option (Master clone of the level's transparent materia
 "and that should be it". All three layer defaults settled: solid = Master opaque clone,
 cutout = Unlit/Texture, translucent = Master transparent clone. F9/F10/F11 remain as a runtime
 comparison tool. (F10 [4], the vertex-lit cutout clone, stays available one press away.)
+
+User confirmed the sneak fix: sneaking works on ULTRAKILL floors, running too.
+
+---
+
+## 2026-10-13 — Milestone E: placing blocks on ULTRAKILL geometry (awaiting playtest)
+
+**Design (after SkyCraft's SkyClip, MIT).** `EntityPickMixin` redirects the single
+`Level.clip` call in `Entity.pick(DFZ)` (verified: exactly one), for players only.
+`UkPick.refine` also raycasts the ULTRAKILL boxes (`UkCollision.raycast`, slab test; boxes the
+eye starts inside are skipped) and keeps the nearer hit. An ULTRAKILL hit becomes
+`UltrakillHitResult` whose block position is the EMPTY cell on the near side of the surface
+(location stepped 1e-4 along the face normal). Vanilla then does the rest:
+- right click with a block: the cell is air, air is replaceable, so BlockItem places INTO it;
+  the server's checks pass (location within 1.0000001 of the cell centre per axis; reach);
+- left click: verified in bytecode that `startAttack` and `continueAttack` both test `isAir()`
+  before any destroy call, so ULTRAKILL geometry only gets a swing;
+- the block result also caps entity targeting, so walls will block hitting through them.
+Grid snapping: a surface partway through a cell (floor top 64.3) puts the block in that cell,
+slightly embedded rather than floating. Python port check: floor -> cell above, wall from
+either side -> the empty side, eye inside a box -> no hit.
+
+**Outline.** New `SELECTION` slot (Minecraft -> ULTRAKILL; appended after LEVEL, rings/table
+shift, layout check passes): kind 0 none, 1 a Minecraft block's outline-shape bounds, 2 the
+placement cell on ULTRAKILL geometry (only while holding a block); inflated 0.002. ULTRAKILL
+draws it as a 12-edge line mesh under the world root, black at 40% (Sprites/Default).
+
+Not yet: block-breaking cracks (textures are outside the block atlas), dropped items.
+
+---
+
+## 2026-10-13 — Playtest: placing works; pitch was inverted all along; guns off (awaiting playtest)
+
+User: blocks can be placed, but "Minecraft's and ULTRAKILL's up and down are reversed": looking
+down places a block above. Also: disable ULTRAKILL's guns, they get in the way.
+
+**Pitch — measured, not derived.** Pairing ULTRAKILL's logged `mouse dx,dy` with the next
+`puppet camera: mc ... pitch=` change: 13/13 samples show forwarded mouse-UP made Minecraft's
+pitch INCREASE (look down). Cause: Unity's pointer delta is +up; Minecraft's accumulatedDY is
+screen coordinates, +down; it was forwarded unflipped. Stage 1's "up/down reversed" report was
+then fixed by copying pitch WITHOUT negation, which cancelled the error on screen — the camera
+felt right while Minecraft looked the opposite way. Nothing used Minecraft's real view until
+the Milestone E crosshair raycast. This is the HANDOVER's "pitch sign set from report, overriding
+a derivation" sharp edge; the original derivation (rotationX = -mcPitch) was right.
+**Fix:** InputApplier flips mouse Y at the boundary into Minecraft; PuppetController maps
+rotationX = -mcPitch (anchor and delta). Feel unchanged; both games now look the same way.
+
+**Guns off:** `PuppetController.DisableWeapons` calls ULTRAKILL's own `GunControl.NoWeapon()`
+(hides the current weapon, whose object carries its firing scripts; clears `activated`, which
+gates switching) every frame it finds a weapon active, since `YesWeapon()` is called from ~10
+places (level start, respawn, scripts). Fists untouched.
+
+---
+
+## 2026-10-13 — Playtest: directions correct; weapon HUD; eye offset and missed clicks (awaiting playtest)
+
+User: directions now correct. Guns gone but their HUD remains — hide it by default. "Sensitivity"
+differs / an offset between mouse and rotation-position. Left click breaks a block only sometimes.
+
+**Missed clicks — ruled out first (bytecode):** `MouseHandler.onButton` with no screen open calls
+`grabMouse()` (suppressed by our mixin) and then still reaches `KeyMapping.set` + `click`, so
+replayed presses arrive. `startAttack`/`continueAttack` break when the hit block is not air.
+
+**Cause (geometric, not yet measured):** Minecraft casts its crosshair ray from feet + eye height
+(1.62 standing); ULTRAKILL's camera sat wherever its own rig puts it. Same rotation, different
+origin = a different line: an offset between where you look and what Minecraft hits that grows
+for near targets, and clicks that pass the block onto the floor behind. **Fix:** CAMERA slot
+gains `eyeHeight` (= `getEyeHeight()`, the raycast origin's height; slot 20 -> 24 bytes, inside
+its aligned space, nothing moves). `PuppetController.AlignEye` puts ULTRAKILL's camera at the
+mapped feet + eyeHeight after CameraController each frame (head-bob/shake lost; sneaking now
+lowers the view). Logs once how far off the old camera was — the measurement.
+
+**Weapon HUD:** `HudController.weaponIcon` hidden on every HudController (rescanned every 120
+frames), re-asserted because ULTRAKILL toggles it from its HUD settings. Fist panel kept.

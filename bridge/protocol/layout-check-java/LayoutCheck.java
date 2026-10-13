@@ -34,6 +34,9 @@ public class LayoutCheck
         dumpSlot("SlotLevel", dev.ultracraft.bridge.Protocol.SlotLevel.class,
                  dev.ultracraft.bridge.Protocol.SlotLevel.SIZE,
                  dev.ultracraft.bridge.Protocol.SlotLevel.OFF_SEQ);
+        dumpSlot("SlotSelection", dev.ultracraft.bridge.Protocol.SlotSelection.class,
+                 dev.ultracraft.bridge.Protocol.SlotSelection.SIZE,
+                 dev.ultracraft.bridge.Protocol.SlotSelection.OFF_SEQ);
     }
 
     static void dumpSlot(String name, Class<?> cls, int size, int seqOff)

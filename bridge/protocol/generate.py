@@ -84,6 +84,7 @@ SLOTS = [
         ("yaw","f32", "Minecraft degrees"),
         ("pitch","f32", "Minecraft degrees"),
         ("fov","f32", "Minecraft FOV, for the debug overlay only"),
+        ("eyeHeight","f32", "blocks from the feet to the eye, current pose (1.62 standing, lower sneaking)"),
     ]),
     ("SlotInput", "INPUT", "ULTRAKILL -> Minecraft",
      "held keys and mouse delta, forwarded from the focused ULTRAKILL window", [
@@ -120,6 +121,16 @@ SLOTS = [
         ("boundsMaxX","f32", ""),
         ("boundsMaxY","f32", ""),
         ("boundsMaxZ","f32", ""),
+    ]),
+    ("SlotSelection", "SELECTION", "Minecraft -> ULTRAKILL",
+     "what the crosshair targets, for ULTRAKILL to draw Minecraft's outline", [
+        ("kind","u32", "0 nothing, 1 a Minecraft block (its outline), 2 where a held block would go on ULTRAKILL geometry"),
+        ("minX","f32", "Minecraft block coords"),
+        ("minY","f32", ""),
+        ("minZ","f32", ""),
+        ("maxX","f32", ""),
+        ("maxY","f32", ""),
+        ("maxZ","f32", ""),
     ]),
 ]
 

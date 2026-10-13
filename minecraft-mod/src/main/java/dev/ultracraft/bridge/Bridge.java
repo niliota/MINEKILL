@@ -428,6 +428,8 @@ public final class Bridge implements AutoCloseable {
 
     public static final class CameraState {
         public float yaw, pitch, fov;
+        /** Blocks from feet to eye in the current pose; the origin of Minecraft's crosshair ray. */
+        public float eyeHeight;
     }
 
     public boolean readCamera(CameraState out) {
@@ -470,6 +472,21 @@ public final class Bridge implements AutoCloseable {
      * Write the PLAYER slot. Minecraft owns the player, so this is the one value
      * ULTRAKILL depends on most.
      */
+    /** Write the SELECTION slot: what the crosshair targets (kind 0 none, 1 block, 2 placement). */
+    public void writeSelection(int kind, double minX, double minY, double minZ, double maxX, double maxY, double maxZ) {
+        if (!connected) return;
+        int at = Protocol.OFFSET_SELECTION;
+        beginWrite(at);
+        buf.putInt(at + Protocol.SlotSelection.OFF_KIND, kind);
+        buf.putFloat(at + Protocol.SlotSelection.OFF_MINX, (float) minX);
+        buf.putFloat(at + Protocol.SlotSelection.OFF_MINY, (float) minY);
+        buf.putFloat(at + Protocol.SlotSelection.OFF_MINZ, (float) minZ);
+        buf.putFloat(at + Protocol.SlotSelection.OFF_MAXX, (float) maxX);
+        buf.putFloat(at + Protocol.SlotSelection.OFF_MAXY, (float) maxY);
+        buf.putFloat(at + Protocol.SlotSelection.OFF_MAXZ, (float) maxZ);
+        endWrite(at);
+    }
+
     public void writePlayer(PlayerState s) {
         int at = Protocol.OFFSET_PLAYER;
         beginWrite(at);
@@ -501,6 +518,7 @@ public final class Bridge implements AutoCloseable {
         buf.putFloat(at + Protocol.SlotCamera.OFF_YAW, c.yaw);
         buf.putFloat(at + Protocol.SlotCamera.OFF_PITCH, c.pitch);
         buf.putFloat(at + Protocol.SlotCamera.OFF_FOV, c.fov);
+        buf.putFloat(at + Protocol.SlotCamera.OFF_EYEHEIGHT, c.eyeHeight);
         endWrite(at);
     }
 

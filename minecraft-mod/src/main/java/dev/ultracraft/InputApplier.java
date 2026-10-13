@@ -131,6 +131,12 @@ final class InputApplier {
 
         // Throttle mouse forwarding to ~120 Hz. Unity samples per rendered frame and
         // Minecraft ticks at 20 Hz, so without this the mouse would move in visible steps.
+        // Unity's mouse delta is +up; Minecraft's mouse Y is screen coordinates, +down. Measured
+        // 2026-10-13: forwarding it unflipped made mouse-up look DOWN in Minecraft (13/13
+        // samples), hidden on screen by an unnegated pitch copy in ULTRAKILL, until the
+        // crosshair raycast placed blocks above the player when looking down. Flip it here,
+        // once, at the boundary into Minecraft's convention.
+        in.mouseDy = -in.mouseDy;
         if (in.mouseDx != 0f || in.mouseDy != 0f) {
             if (now - lastMouseMs >= 8) {
                 lastMouseMs = now;

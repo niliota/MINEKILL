@@ -299,6 +299,23 @@ namespace UltraCraft.Bridge
             return false;
         }
 
+        public bool TryReadSlot(int offset, int size, out Protocol.SlotSelection slot)
+        {
+            slot = default(Protocol.SlotSelection);
+            if (!Connected || size > _scratch.Length) return false;
+            for (int attempt = 0; attempt < 3; attempt++)
+            {
+                uint s1 = _view.ReadUInt32(offset);
+                if ((s1 & 1) != 0) { Thread.SpinWait(16); continue; }
+                _view.ReadArray(offset, _scratch, 0, size);
+                uint s2 = _view.ReadUInt32(offset);
+                if (s1 != s2) continue;
+                slot = StructFromBytes<Protocol.SlotSelection>(_scratch, 0);
+                return true;
+            }
+            return false;
+        }
+
         public bool TryReadSlot(int offset, int size, out Protocol.SlotLevel slot)
         {
             slot = default(Protocol.SlotLevel);

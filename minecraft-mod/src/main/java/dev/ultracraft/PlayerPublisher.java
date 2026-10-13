@@ -90,10 +90,14 @@ final class PlayerPublisher {
         if (bridge == null) return;
 
         bridge.writePlayer(state);
+        publishSelection(mc, p);
 
         Bridge.CameraState cam = new Bridge.CameraState();
         cam.yaw = state.yaw;
         cam.pitch = state.pitch;
+        // The crosshair ray starts at getEyePosition = feet + getEyeHeight(). ULTRAKILL puts its
+        // camera there, so the line you look down is the line Minecraft raycasts.
+        cam.eyeHeight = p.getEyeHeight();
         // FOV is only carried for diagnostics. 26.3 wraps it in an OptionInstance
         // reached via Options.fov(); the old public field no longer exists.
         cam.fov = 70f;
@@ -142,5 +146,40 @@ final class PlayerPublisher {
                 p.getYRot(1.0f), p.getXRot(1.0f));
         LOG.info("[UltraCraft] player at block {}, {}, {}  yaw/pitch {}  vel {}  onGround={} hp={}",
                 bx, by, bz, yawPitch, pos, p.onGround(), p.getHealth());
+    }
+
+    /**
+     * What the crosshair targets, for ULTRAKILL to draw Minecraft's outline (the world layer has
+     * no other way to show it). A Minecraft block: its outline shape's bounds. ULTRAKILL geometry
+     * (UkPick): the cell a held block would go into, only while holding a block, as SkyCraft
+     * does. Inflated slightly, like Minecraft's own outline, so it does not z-fight the faces.
+     */
+    private void publishSelection(Minecraft mc, LocalPlayer p) {
+        var hit = mc.hitResult;
+        int kind = 0;
+        net.minecraft.world.phys.AABB box = null;
+        if (mc.gui.screen() == null && hit instanceof net.minecraft.world.phys.BlockHitResult bh
+                && hit.getType() == net.minecraft.world.phys.HitResult.Type.BLOCK && mc.level != null) {
+            if (bh instanceof UkPick.UltrakillHitResult) {
+                boolean holdingBlock = p.getMainHandItem().getItem() instanceof net.minecraft.world.item.BlockItem
+                        || p.getOffhandItem().getItem() instanceof net.minecraft.world.item.BlockItem;
+                if (holdingBlock) {
+                    kind = 2;
+                    box = new net.minecraft.world.phys.AABB(bh.getBlockPos());
+                }
+            } else {
+                var shape = mc.level.getBlockState(bh.getBlockPos()).getShape(mc.level, bh.getBlockPos());
+                if (!shape.isEmpty()) {
+                    kind = 1;
+                    box = shape.bounds().move(bh.getBlockPos());
+                }
+            }
+        }
+        if (box == null) {
+            mcBridge.writeSelection(0, 0, 0, 0, 0, 0, 0);
+        } else {
+            box = box.inflate(0.002);
+            mcBridge.writeSelection(kind, box.minX, box.minY, box.minZ, box.maxX, box.maxY, box.maxZ);
+        }
     }
 }
