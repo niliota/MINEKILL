@@ -1,0 +1,84 @@
+// UltraCraft, the Minecraft side.
+//
+// Fabric Loom, Minecraft 26.3, Java 25 (matches the launcher instance's bundled
+// runtime so the mod and the game agree on the class file version).
+//
+// loom { }
+//   serverOnly / runs are left at defaults; the mod is client-side because the
+//   bridge lives in the client process. Multiplayer is deliberately not bridged.
+
+plugins {
+    id 'fabric-loom' version '1.18.3'
+    id 'maven-publish'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+    archivesName = project.archives_base_name
+}
+
+repositories {
+    maven { url = "https://maven.fabricmc.net/" }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:26.3"
+
+    // NOTE: no `mappings` line on purpose.
+    //
+    // Minecraft 26.3 ships UNOBFUSCATED. Verified four ways:
+    //   - its version manifest carries only client and server jars, no
+    //     client_mappings, so loom.officialMojangMappings() fails with
+    //     "Failed to find official mojang mappings for 26.3";
+    //   - the Fabric yarn endpoint for 26.3 returns an empty list;
+    //   - Fabric's intermediary artifact for 26.3 contains a mappings.tiny that
+    //     is a 25-byte header and nothing else, i.e. an empty mapping set;
+    //   - the client jar itself contains real names such as
+    //     net/minecraft/client/player/LocalPlayer.class.
+    //
+    // So the names in the jar are the names to code against. Note 26.3 also
+    // RENAMED key classes: MinecraftClient is now net.minecraft.client.Minecraft,
+    // and its per-tick method is runTick(boolean), not tick().
+    //
+    // A `mappings` line is still mandatory: Loom fails configuration with
+    // "Configuration 'mappings' has no dependencies" without one. The empty
+    // intermediary set below IS the identity mapping for an unobfuscated game,
+    // which is why it configures cleanly and why readable names survive into the
+    // compiled mod. Fabric's meta API lists exactly this artifact for 26.3:
+    //   net.fabricmc:intermediary:0.0.0
+    mappings "net.fabricmc:intermediary:0.0.0:v2"
+
+    modImplementation "net.fabricmc:fabric-loader:0.19.5"
+    // mixinextras is already on the instance; no Fabric API dependency yet.
+    // It gets added when a feature actually needs an API module, so this mod
+    // stays small and easy to build.
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
+    // No sources jar: remapping it needs a "named" namespace, which does not exist
+    // for an unobfuscated game. The remap step fails with
+    //   Could not find namespace "named" in provided tiny tree
+    // and would remap nothing anyway.
+    withSourcesJar()
+}
+
+tasks.matching { it.name == 'remapSourcesJar' }.configureEach { enabled = false }
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 25
+    options.encoding = "UTF-8"
+}
+
+processResources {
+    inputs.property "version", project.version
+    inputs.property "minecraft_version", project.minecraft_version
+
+    filesMatching("fabric.mod.json") {
+        expand "version": project.version,
+                "minecraft_version": project.minecraft_version
+    }
+}

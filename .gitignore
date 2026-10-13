@@ -1,0 +1,29 @@
+# Build output
+bin/
+obj/
+build/
+.gradle/
+
+# ---- game-derived and machine-specific content: never commit ----
+# ULTRAKILL/ and UltraCraft/ are copies of the user's own game installs. They are
+# large, they contain copyrighted game assets, and they are not ours to publish.
+ULTRAKILL/
+UltraCraft/
+
+# The shared bridge file. Created at runtime, machine-specific, and its contents
+# are live process state.
+*.bridge
+
+# BepInEx runtime output
+LogOutput.log
+output_log.txt
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Local copies of earlier mod builds (binaries), kept for rollback only
+backups/
+

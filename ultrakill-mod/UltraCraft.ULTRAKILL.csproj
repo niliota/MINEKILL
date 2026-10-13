@@ -1,0 +1,82 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- BepInEx 5 Mono plugins load into ULTRAKILL's own Mono runtime, which is
+         .NET Framework 4.x. net472 matches what the game provides at runtime;
+         netstandard2.0 would compile but can fail to resolve references under Mono. -->
+    <TargetFramework>net472</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>UltraCraft.ULTRAKILL</AssemblyName>
+    <RootNamespace>UltraCraft.Bridge</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <NoWarn>CS0649;CS0169</NoWarn>
+
+    <!-- Both directories are read-only inputs. Default them to the layout in this
+         repo, override on the command line if the game lives elsewhere. -->
+    <GameDir Condition="'$(GameDir)' == ''">../ULTRAKILL</GameDir>
+    <BepInExDir Condition="'$(BepInExDir)' == ''">$(GameDir)/BepInEx</BepInExDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="src/**/*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Loader reference. Ships with BepInEx 5. -->
+    <Reference Include="BepInEx">
+      <HintPath>$(BepInExDir)/core/BepInEx.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- Harmony ships with BepInEx 5. Used to neutralise ULTRAKILL's own movement
+         while Minecraft is the authority for the player. -->
+    <Reference Include="0Harmony">
+      <HintPath>$(BepInExDir)/core/0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- ULTRAKILL's own assemblies, read-only. The build never writes to GameDir and
+         the game folder is never modified by the build. -->
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(GameDir)/ULTRAKILL_Data/Managed/Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>$(GameDir)/ULTRAKILL_Data/Managed/UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(GameDir)/ULTRAKILL_Data/Managed/UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.PhysicsModule">
+      <HintPath>$(GameDir)/ULTRAKILL_Data/Managed/UnityEngine.PhysicsModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.InputLegacyModule">
+      <HintPath>$(GameDir)/ULTRAKILL_Data/Managed/UnityEngine.InputLegacyModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <!-- ULTRAKILL reads its own look input through Unity's Input System
+         (CameraController: InputSource.Look.ReadValue<Vector2>()), not the legacy Input
+         class. Reading the same source is what lets forwarded camera deltas survive
+         ULTRAKILL locking the cursor during play. Ships inside the game folder, so this
+         adds no download and the build still writes nothing into GameDir. -->
+    <Reference Include="Unity.InputSystem">
+      <HintPath>$(GameDir)/ULTRAKILL_Data/Managed/Unity.InputSystem.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.SceneManagementModule">
+      <HintPath>$(GameDir)/ULTRAKILL_Data/Managed/UnityEngine.SceneManagementModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="WarnMissingGameDir" BeforeTargets="ResolveAssemblyReferences">
+    <Warning Condition="!Exists('$(GameDir)/ULTRAKILL_Data/Managed/Assembly-CSharp.dll')"
+             Text="Assembly-CSharp.dll not found under $(GameDir). Pass -p:GameDir=/path/to/ULTRAKILL" />
+  </Target>
+
+</Project>

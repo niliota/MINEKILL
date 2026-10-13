@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "ultracraft",
+  "version": "${version}",
+  "name": "UltraCraft",
+  "description": "Minecraft as the simulation and content engine for ULTRAKILL. Minecraft owns the player, inventory, mining and combat; ULTRAKILL owns the world and camera.",
+  "authors": [
+    "UltraCraft"
+  ],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "dev.ultracraft.UltraCraftClient"
+    ]
+  },
+  "mixins": [
+    {
+      "config": "ultracraft.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=0.19.5",
+    "minecraft": "~26.3"
+  }
+}
