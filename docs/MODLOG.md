@@ -2403,3 +2403,12 @@ User confirmed: Minecraft loads; animated sprites (water, lava, fire) work; ches
   count them.
 
 User confirmed: fire fixed, water flows/pools/places on ULTRAKILL geometry, cut-out blocks fine. Still open: chest/banner cracks, arrows keep turning.
+- **Chest/banner cracks (2nd try):** in 26.3 chests and banners have RenderShape MODEL with an empty
+  block model (particle texture only), so the model path found no quads and the shape fallback was
+  never reached. Now any crack that produced no quads falls back to the outline shape.
+- **Arrows (2nd try):** `Projectile.hitTargetOrDeflectSelf` returns early, without `onHit`, when the
+  hit block is air - which an ULTRAKILL cell is. Arrows were set onto the wall each tick but never
+  stuck, so gravity kept accelerating them. ProjectileMixin redirects that one `getBlockState` to
+  read stone for an air cell ULTRAKILL geometry reaches into. Target checked in bytecode.
+
+User confirmed: chest/banner/sign cracks; arrows, tridents and thrown projectiles hit and stick on ULTRAKILL geometry.
