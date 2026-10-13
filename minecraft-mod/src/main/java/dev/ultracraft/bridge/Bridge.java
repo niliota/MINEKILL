@@ -309,6 +309,8 @@ public final class Bridge implements AutoCloseable {
         public int hotbarSeq, hotbarSlot;
         /** Running sum of mouse-wheel steps in ULTRAKILL. */
         public float scrollTotal;
+        /** ULTRAKILL's screen size in pixels (0 from an older build). */
+        public int screenWidth, screenHeight;
         public long tickTimestamp;
     }
 
@@ -353,6 +355,8 @@ public final class Bridge implements AutoCloseable {
         out.hotbarSeq = lastRead[Protocol.SlotInput.OFF_HOTBARSEQ] & 0xFF;
         out.hotbarSlot = lastRead[Protocol.SlotInput.OFF_HOTBARSLOT] & 0xFF;
         out.scrollTotal = f(Protocol.SlotInput.OFF_SCROLLTOTAL);
+        out.screenWidth = ByteBuffer.wrap(lastRead).order(ByteOrder.LITTLE_ENDIAN).getShort(Protocol.SlotInput.OFF_SCREENWIDTH) & 0xFFFF;
+        out.screenHeight = ByteBuffer.wrap(lastRead).order(ByteOrder.LITTLE_ENDIAN).getShort(Protocol.SlotInput.OFF_SCREENHEIGHT) & 0xFFFF;
         return endRead(at, seq);
     }
 
@@ -479,54 +483,32 @@ public final class Bridge implements AutoCloseable {
      * Write the PLAYER slot. Minecraft owns the player, so this is the one value
      * ULTRAKILL depends on most.
      */
-    /** Scalar HUD values; see the HUD table in generate.py. */
-    public static final class HudState {
-        public int selected, gameMode, food, armor, xpLevel, air, maxAir;
-        public float health, maxHealth, absorption, xpProgress;
-    }
-
     /**
-     * Write the HUD table under its seqlock. Per slot: rec = u0,v0,u1,v1, su0,sv0,su1,sv1,
-     * damage (9 floats); ints = kind, count, atlas (3); plus the two tints.
+     * Write the GUI table under its seqlock: xyuv (4 floats per vertex), rgba and texture key per
+     * vertex, plus Minecraft's GUI scale and size for ULTRAKILL's screen.
      */
-    public void writeHudTable(long ts, HudState h, int count, float[] rec, int[] ints, int[] tintTop, int[] tintSide) {
+    public void writeGuiTable(long ts, int count, int scale, int width, int height, float[] xyuv, int[] rgba, int[] tex) {
         if (!connected) return;
-        int b = Protocol.TBL_HUD_OFFSET;
-        beginWrite(b + Protocol.TBL_HUD_OFF_SEQ);
-        buf.putLong(b + Protocol.TBL_HUD_OFF_TICKTIMESTAMP, ts);
-        buf.putInt(b + Protocol.TBL_HUD_OFF_COUNT, count);
-        buf.putInt(b + Protocol.TBL_HUD_OFF_SELECTED, h.selected);
-        buf.putInt(b + Protocol.TBL_HUD_OFF_GAMEMODE, h.gameMode);
-        buf.putFloat(b + Protocol.TBL_HUD_OFF_HEALTH, h.health);
-        buf.putFloat(b + Protocol.TBL_HUD_OFF_MAXHEALTH, h.maxHealth);
-        buf.putFloat(b + Protocol.TBL_HUD_OFF_ABSORPTION, h.absorption);
-        buf.putInt(b + Protocol.TBL_HUD_OFF_FOOD, h.food);
-        buf.putInt(b + Protocol.TBL_HUD_OFF_ARMOR, h.armor);
-        buf.putInt(b + Protocol.TBL_HUD_OFF_XPLEVEL, h.xpLevel);
-        buf.putFloat(b + Protocol.TBL_HUD_OFF_XPPROGRESS, h.xpProgress);
-        buf.putInt(b + Protocol.TBL_HUD_OFF_AIR, h.air);
-        buf.putInt(b + Protocol.TBL_HUD_OFF_MAXAIR, h.maxAir);
-        buf.putInt(b + Protocol.TBL_HUD_OFF_HIDEGUI, 0);
-        int r0 = b + Protocol.TBL_HUD_OFF_RECORDS;
+        if (count > Protocol.TBL_GUI_CAPACITY) count = Protocol.TBL_GUI_CAPACITY;
+        int b = Protocol.TBL_GUI_OFFSET;
+        beginWrite(b + Protocol.TBL_GUI_OFF_SEQ);
+        buf.putLong(b + Protocol.TBL_GUI_OFF_TICKTIMESTAMP, ts);
+        buf.putInt(b + Protocol.TBL_GUI_OFF_COUNT, count);
+        buf.putInt(b + Protocol.TBL_GUI_OFF_GUISCALE, scale);
+        buf.putInt(b + Protocol.TBL_GUI_OFF_GUIWIDTH, width);
+        buf.putInt(b + Protocol.TBL_GUI_OFF_GUIHEIGHT, height);
+        int r0 = b + Protocol.TBL_GUI_OFF_RECORDS;
         for (int i = 0; i < count; i++) {
-            int at = r0 + i * Protocol.TBL_HUD_RECORD_SIZE, o = i * 9, k = i * 3;
-            buf.putInt(at + Protocol.TBL_HUD_REC_OFF_KIND, ints[k]);
-            buf.putInt(at + Protocol.TBL_HUD_REC_OFF_ITEMCOUNT, ints[k + 1]);
-            buf.putFloat(at + Protocol.TBL_HUD_REC_OFF_DAMAGE, rec[o + 8]);
-            buf.putInt(at + Protocol.TBL_HUD_REC_OFF_ATLAS, ints[k + 2]);
-            buf.putFloat(at + Protocol.TBL_HUD_REC_OFF_U0, rec[o]);
-            buf.putFloat(at + Protocol.TBL_HUD_REC_OFF_V0, rec[o + 1]);
-            buf.putFloat(at + Protocol.TBL_HUD_REC_OFF_U1, rec[o + 2]);
-            buf.putFloat(at + Protocol.TBL_HUD_REC_OFF_V1, rec[o + 3]);
-            buf.putFloat(at + Protocol.TBL_HUD_REC_OFF_SU0, rec[o + 4]);
-            buf.putFloat(at + Protocol.TBL_HUD_REC_OFF_SV0, rec[o + 5]);
-            buf.putFloat(at + Protocol.TBL_HUD_REC_OFF_SU1, rec[o + 6]);
-            buf.putFloat(at + Protocol.TBL_HUD_REC_OFF_SV1, rec[o + 7]);
-            buf.putInt(at + Protocol.TBL_HUD_REC_OFF_TINTTOP, tintTop[i]);
-            buf.putInt(at + Protocol.TBL_HUD_REC_OFF_TINTSIDE, tintSide[i]);
+            int at = r0 + i * Protocol.TBL_GUI_RECORD_SIZE, o = i * 4;
+            buf.putFloat(at + Protocol.TBL_GUI_REC_OFF_X, xyuv[o]);
+            buf.putFloat(at + Protocol.TBL_GUI_REC_OFF_Y, xyuv[o + 1]);
+            buf.putFloat(at + Protocol.TBL_GUI_REC_OFF_U, xyuv[o + 2]);
+            buf.putFloat(at + Protocol.TBL_GUI_REC_OFF_V, xyuv[o + 3]);
+            buf.putInt(at + Protocol.TBL_GUI_REC_OFF_RGBA, rgba[i]);
+            buf.putInt(at + Protocol.TBL_GUI_REC_OFF_TEX, tex[i]);
         }
         java.lang.invoke.VarHandle.releaseFence();
-        endWrite(b + Protocol.TBL_HUD_OFF_SEQ);
+        endWrite(b + Protocol.TBL_GUI_OFF_SEQ);
     }
 
     /**

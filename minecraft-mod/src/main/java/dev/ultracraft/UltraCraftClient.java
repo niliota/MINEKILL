@@ -33,7 +33,6 @@ public class UltraCraftClient implements ClientModInitializer {
     private dev.ultracraft.bridge.Stream stream;
     private dev.ultracraft.render.WorldMesher mesher;
     private final dev.ultracraft.render.ParticleExport particles = new dev.ultracraft.render.ParticleExport();
-    private final dev.ultracraft.render.HudExport hud = new dev.ultracraft.render.HudExport();
 
     /**
      * Whether Minecraft should behave as if its window were focused.
@@ -71,6 +70,13 @@ public class UltraCraftClient implements ClientModInitializer {
      * at and drives; Minecraft is the simulation running behind it. When ULTRAKILL is
      * connected there is no interaction for a grabbed cursor to serve.
      */
+    private static volatile boolean ukLive;
+
+    /** True while a live ULTRAKILL is on the bridge (updated every client frame). */
+    public static boolean ukLive() {
+        return ukLive;
+    }
+
     public static boolean bridgeConnected() {
         return instance != null && instance.bridge != null && instance.bridge.connected();
     }
@@ -133,6 +139,7 @@ public class UltraCraftClient implements ClientModInitializer {
         // `ukPid() != 0` alone once made this report
         // "HANDSHAKE OK, ULTRAKILL pid 32" for a process dead for twenty minutes.
         boolean ukAlive = bridge.ukPid() != 0 && !bridge.ukStale(2000);
+        ukLive = ukAlive;
 
         if (!handshakeReported && ukAlive) {
             handshakeReported = true;
@@ -177,7 +184,7 @@ public class UltraCraftClient implements ClientModInitializer {
         if (input != null && bridge.connected()) input.apply(mc);
         if (mesher != null && ukAlive) mesher.frame(mc);
         if (ukAlive) particles.frame(mc, bridge);
-        if (ukAlive) hud.frame(mc, bridge);
+        if (ukAlive && stream != null && stream.ok()) dev.ultracraft.gui.GuiTextures.flush(stream);
 
         if (++ticks % 200 == 0) {
             LOG.info("[UltraCraft] tick {}: uk pid {} hb {} flags {} dropped {} | {}",

@@ -299,6 +299,7 @@ final class InputApplier {
      * bytecode, it starts with the same {@code window == 0 -> return} guard as onButton.
      */
     private void applyHotbarAndScroll(Minecraft mc, Bridge.InputState in) {
+        dev.ultracraft.gui.GuiLayout.setScreen(mc, in.screenWidth, in.screenHeight);
         if (lastHotbarSeq < 0) {
             lastHotbarSeq = in.hotbarSeq;
         } else if (in.hotbarSeq != lastHotbarSeq) {

@@ -23,6 +23,22 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(Window.class)
 public abstract class WindowMixin {
 
+    /** GUI layout for ULTRAKILL's screen (see GuiLayout). */
+    @Inject(method = "getGuiScaledWidth", at = @At("HEAD"), cancellable = true)
+    private void ultracraft$guiWidth(CallbackInfoReturnable<Integer> cir) {
+        if (dev.ultracraft.gui.GuiLayout.active()) cir.setReturnValue(dev.ultracraft.gui.GuiLayout.scaledWidth());
+    }
+
+    @Inject(method = "getGuiScaledHeight", at = @At("HEAD"), cancellable = true)
+    private void ultracraft$guiHeight(CallbackInfoReturnable<Integer> cir) {
+        if (dev.ultracraft.gui.GuiLayout.active()) cir.setReturnValue(dev.ultracraft.gui.GuiLayout.scaledHeight());
+    }
+
+    @Inject(method = "getGuiScale", at = @At("HEAD"), cancellable = true)
+    private void ultracraft$guiScale(CallbackInfoReturnable<Integer> cir) {
+        if (dev.ultracraft.gui.GuiLayout.active()) cir.setReturnValue(dev.ultracraft.gui.GuiLayout.scale());
+    }
+
     @Inject(method = "isFocused", at = @At("HEAD"), cancellable = true)
     private void ultracraft$treatAsFocused(CallbackInfoReturnable<Boolean> cir) {
         if (UltraCraftClient.treatAsFocused()) {

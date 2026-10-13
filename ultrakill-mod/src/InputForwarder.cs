@@ -140,6 +140,9 @@ namespace UltraCraft
                 hotbarSeq = _hotbarSeq,
                 hotbarSlot = _hotbarSlot,
                 scrollTotal = _scrollTotal,
+                // Minecraft lays its GUI out for this screen (its GUI is replayed here).
+                screenWidth = (ushort)Mathf.Clamp(Screen.width, 0, 65535),
+                screenHeight = (ushort)Mathf.Clamp(Screen.height, 0, 65535),
             });
 
             // Reported for diagnostics only.

@@ -346,7 +346,8 @@ namespace UltraCraft
                           $"streamRecords={_world.Stream.Records}\n" +
                           $"streamBytesRead={_world.Stream.BytesRead}\n" +
                           $"streamPending={_world.Stream.Pending}\n" +
-                          $"streamResync={_world.Stream.ResyncRequested}/{_world.Stream.ResyncServed}\n"
+                          $"streamResync={_world.Stream.ResyncRequested}/{_world.Stream.ResyncServed}\n" +
+                          $"guiVertices={(_hud != null ? _hud.LastVertexCount : -1)}\n"
                         : "") +
                     _playerText;
 

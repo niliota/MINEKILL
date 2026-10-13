@@ -2074,3 +2074,53 @@ GUI.Label (Unity's font for now, with Minecraft-style shadow). Hides HudControll
 UnityEngine.IMGUIModule, UIModule and TextRenderingModule references.
 
 User: everything in the HUD first pass works. Requests next: Minecraft's font, real non-cube item icons, and ALL of the HUD (animations etc.).
+
+---
+
+## 2026-10-13 — Whole Minecraft GUI replayed natively (awaiting playtest)
+
+User asked for Minecraft's font, real non-cube icons, and ALL of the HUD (e.g. heart animations
+on damage). Rebuilding Gui element by element would never be complete and would drift, so the
+hand-built HUD (HudExport / HUD table / HudView drawing) is replaced by a capture of what
+Minecraft's own GUI draws.
+
+**26.3 GUI pipeline (javap):** the GUI is collected into a `GuiRenderState`. `GuiRenderer.render()`
+-> `prepare()`: `prepareText` turns texts into glyph elements, `prepareItemElements` renders items
+into a GPU item atlas and queues blits via `submitBlitFromItemAtlas(item, slot)`;
+`addElementsToMeshes` then calls `addElementToMesh(GuiElementRenderState)` for every element in final
+order. Every element has `buildVertices(VertexConsumer)`, `textureSetup().texure0()`, scissor.
+Layout comes from `Window.getGuiScaledWidth/Height()` (via `GuiGraphicsExtractor.guiWidth()`).
+Items: `ItemStackRenderState.submit(pose, SubmitNodeCollector, light, overlay, 0)` (the call
+`GuiItemAtlas.drawToSlot` makes after translate(slot centre) + scale(slot size)); a plain layer
+arrives as one `submitItem(pose, ctx, light, overlay, outline, tints, ItemQuads, foil)` after
+`applyTransform` (ItemTransform + localTransform). Fonts: `FontTexture` (256x256) `add()` reserves a
+slot and calls `GlyphBitmap.upload(x, y, texture)` once; bitmap glyphs keep CPU pixels in
+`BitmapProvider$Glyph.imageData.image` at offsetX/offsetY (upload is a GPU buffer copy, not
+writeToTexture, so writeToTexture hooks would miss it).
+
+**Minecraft:** `GuiLayout` + WindowMixin answer getGuiScaledWidth/Height/getGuiScale for
+ULTRAKILL's screen (sent in INPUT; Window.calculateScale's rule with the player's GUI Scale option).
+`GuiRendererMixin` (render HEAD/RETURN, submitBlitFromItemAtlas, addElementToMesh) feeds
+`GuiCapture`, a VertexConsumer that records every quad (x, y, u, v, rgba, texture key); an item
+atlas blit is swapped for the item's model quads via our own SubmitNodeCollector, projected like
+drawToSlot (slot centre + 16 px/unit, y up, then the item's GUI pose), depth-sorted, lit like the
+GUI (flat items full bright; block items 0.4 + 0.6 x two directional lights). Special-renderer
+items (chests, banners, heads) are not drawn yet. `GuiTextures`: atlas textures by identity ->
+GUI/BLOCKS/ITEMS keys; font sheets mirrored via `FontTextureMixin` (@Redirect of the upload) and
+streamed as STREAM_MSG_TEXTURE (new sheets whole, then dirty-rect patches); other textures are
+logged once and their quads skipped. Non-bitmap glyph types (unifont, TTF) logged, not mirrored yet.
+
+**Protocol:** INPUT += screenWidth/screenHeight (u16; generator gains u16); STREAM_MSG_TEXTURE;
+GUI table (32,768 vertices x 24 bytes) replaces the HUD table; GUI_TEX_* keys.
+**ULTRAKILL:** `HudView` replays the table with GL quads in OnGUI at Minecraft's GUI scale,
+switching texture on key change; mirrored textures created/patched from the stream (rows in atlas
+order, no flip). Status file gains guiVertices.
+
+**Crash at startup (my bug):** `IllegalStateException: Texture does not exist` from
+`AbstractTexture.getTexture()` in `GuiTextures.key`, called by the capture during Minecraft's first
+loading screen, before the atlases' GPU textures exist. Fixes: capture only while ULTRAKILL is live
+(skips startup too); atlas lookup catches not-ready and retries next frame without caching; every
+capture hook catches its own exceptions (element skipped, logged once) so Minecraft's GUI can
+never be broken by it.
+
+User confirmed: the replayed Minecraft GUI is fine (crash fix included).

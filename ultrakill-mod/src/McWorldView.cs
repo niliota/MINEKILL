@@ -157,6 +157,7 @@ namespace UltraCraft
                     case Protocol.STREAM_MSG_SECTION: LoadSection(data, len); break;
                     case Protocol.STREAM_MSG_EXTRA_ATLAS: LoadExtraAtlas(data, len); break;
                     case Protocol.STREAM_MSG_GUI_SPRITES: LoadGuiSprites(data, len); break;
+                    case Protocol.STREAM_MSG_TEXTURE: LoadTexturePatch(data, len); break;
                     default: _log.LogWarning($"world: unknown stream record type {type} ({len} bytes)"); break;
                 }
             }
@@ -234,6 +235,54 @@ namespace UltraCraft
             else if (id == Protocol.STREAM_ATLAS_GUI) { if (GuiAtlas != null) UnityEngine.Object.Destroy(GuiAtlas); GuiAtlas = tex; }
             else { UnityEngine.Object.Destroy(tex); return; }
             _log.LogInfo($"world: {tex.name} {w}x{h} loaded");
+        }
+
+        /// <summary>Textures mirrored from Minecraft (font sheets), by GUI_TEX key.</summary>
+        private readonly Dictionary<int, Texture2D> _dynamic = new Dictionary<int, Texture2D>();
+
+        /// <summary>The texture behind a GUI vertex texture key, or null if not (yet) available.</summary>
+        public Texture GuiTexture(int key)
+        {
+            switch (key)
+            {
+                case Protocol.GUI_TEX_NONE: return Texture2D.whiteTexture;
+                case Protocol.GUI_TEX_GUI: return GuiAtlas;
+                case Protocol.GUI_TEX_BLOCKS: return _atlas;
+                case Protocol.GUI_TEX_ITEMS: return ItemAtlas;
+                default: return _dynamic.TryGetValue(key, out Texture2D t) ? t : null;
+            }
+        }
+
+        /// <summary>Create texture `key` if new, then write the patch (rows top to bottom, like the atlases).</summary>
+        private void LoadTexturePatch(byte[] data, int len)
+        {
+            int key = BitConverter.ToInt32(data, 0), w = BitConverter.ToInt32(data, 4), h = BitConverter.ToInt32(data, 8);
+            int x = BitConverter.ToInt32(data, 12), y = BitConverter.ToInt32(data, 16);
+            int pw = BitConverter.ToInt32(data, 20), ph = BitConverter.ToInt32(data, 24);
+            if (w <= 0 || h <= 0 || pw <= 0 || ph <= 0 || x < 0 || y < 0 || x + pw > w || y + ph > h || len < 28 + pw * ph * 4)
+            {
+                _log.LogError($"world: bad texture patch key {key} {w}x{h} at {x},{y} size {pw}x{ph}");
+                return;
+            }
+            if (!_dynamic.TryGetValue(key, out Texture2D tex) || tex.width != w || tex.height != h)
+            {
+                if (tex != null) UnityEngine.Object.Destroy(tex);
+                tex = new Texture2D(w, h, TextureFormat.RGBA32, false)
+                {
+                    filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Clamp,
+                    hideFlags = HideFlags.HideAndDontSave, name = $"UltraCraft.GuiTexture{key}",
+                };
+                tex.SetPixels32(new Color32[w * h]);
+                _dynamic[key] = tex;
+                _log.LogInfo($"world: mirrored texture {key} ({w}x{h}) created");
+            }
+            var px = new Color32[pw * ph];
+            for (int i = 0, o = 28; i < px.Length; i++, o += 4)
+                px[i] = new Color32(data[o], data[o + 1], data[o + 2], data[o + 3]);
+            // Row j of the patch is texture row y + j: the same row order as the atlases, so
+            // Minecraft's v samples the same texel without flipping.
+            tex.SetPixels32(x, y, pw, ph, px);
+            tex.Apply(false, false);
         }
 
         private void LoadGuiSprites(byte[] data, int len)

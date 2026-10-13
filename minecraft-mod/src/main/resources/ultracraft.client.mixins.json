@@ -16,7 +16,9 @@
     "ParticleEngineAccessor",
     "ParticleGroupAccessor",
     "ParticleAccessor",
-    "SingleQuadParticleAccessor"
+    "SingleQuadParticleAccessor",
+    "GuiRendererMixin",
+    "FontTextureMixin"
   ],
   "injectors": {
     "defaultRequire": 1

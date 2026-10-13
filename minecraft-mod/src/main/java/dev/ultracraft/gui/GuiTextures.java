@@ -1,0 +1,159 @@
+package dev.ultracraft.gui;
+
+import com.mojang.blaze3d.font.GlyphBitmap;
+import com.mojang.blaze3d.platform.NativeImage;
+import com.mojang.renderpearl.api.textures.GpuTexture;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
+import dev.ultracraft.bridge.Protocol;
+import dev.ultracraft.bridge.Stream;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.HashSet;
+import java.util.IdentityHashMap;
+import java.util.Map;
+import java.util.Set;
+import net.minecraft.client.Minecraft;
+import net.minecraft.data.AtlasIds;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * Which texture a captured GUI quad samples, as a key ULTRAKILL understands, and CPU mirrors of
+ * Minecraft's font sheets so ULTRAKILL has their pixels (no images of rendered frames cross; these
+ * are the source glyph bitmaps).
+ *
+ * <p>Atlases (GUI, blocks, items) are recognised by identity and already exported by the world
+ * layer. Font sheets ({@code FontTexture}, 256x256) are filled on the GPU as text first appears:
+ * FontTextureMixin redirects each glyph's {@code GlyphBitmap.upload(x, y, texture)} through
+ * {@link #onGlyphUpload}, which copies the glyph's CPU pixels into a mirror of that sheet. Mirrors
+ * exist from game start, so glyphs uploaded before ULTRAKILL connected are not lost.
+ */
+public final class GuiTextures {
+    private static final Logger LOG = LoggerFactory.getLogger("ultracraft");
+
+    private static final class Mirror {
+        final int key, w, h;
+        final byte[] rgba;
+        int dx0 = Integer.MAX_VALUE, dy0 = Integer.MAX_VALUE, dx1 = -1, dy1 = -1;
+        boolean full = true;
+        Mirror(int key, int w, int h) { this.key = key; this.w = w; this.h = h; this.rgba = new byte[w * h * 4]; }
+        void dirty(int x, int y, int ww, int hh) {
+            dx0 = Math.min(dx0, x); dy0 = Math.min(dy0, y);
+            dx1 = Math.max(dx1, x + ww); dy1 = Math.max(dy1, y + hh);
+        }
+    }
+
+    private static final Map<GpuTexture, Mirror> MIRRORS = new IdentityHashMap<>();
+    private static final Map<GpuTexture, Integer> KEYS = new IdentityHashMap<>();
+    private static final Set<String> UNKNOWN_LOGGED = new HashSet<>();
+    private static final Set<Class<?>> UNSUPPORTED_LOGGED = new HashSet<>();
+    private static int nextKey = Protocol.GUI_TEX_DYNAMIC_BASE;
+    private static Object atlasIdentity;
+
+    private GuiTextures() {}
+
+    /** The key for a texture view, or -1 for one ULTRAKILL cannot have (quads with it are skipped). */
+    public static synchronized int key(Minecraft mc, GpuTextureView view) {
+        if (view == null) return Protocol.GUI_TEX_NONE;
+        GpuTexture t = view.texture();
+        // The atlases' GPU textures only exist once resources have loaded; asking earlier throws
+        // "Texture does not exist" (crashed the 2026-10-13 build at the first loading screen).
+        // Until then, map nothing and try again next frame.
+        try {
+            Object identity = mc.getAtlasManager().getAtlasOrThrow(AtlasIds.GUI).getTexture();
+            if (identity != atlasIdentity) {                 // first time, or a resource reload
+                KEYS.clear();
+                KEYS.put(mc.getAtlasManager().getAtlasOrThrow(AtlasIds.GUI).getTexture(), Protocol.GUI_TEX_GUI);
+                KEYS.put(mc.getAtlasManager().getAtlasOrThrow(AtlasIds.BLOCKS).getTexture(), Protocol.GUI_TEX_BLOCKS);
+                KEYS.put(mc.getAtlasManager().getAtlasOrThrow(AtlasIds.ITEMS).getTexture(), Protocol.GUI_TEX_ITEMS);
+                atlasIdentity = identity;
+            }
+        } catch (RuntimeException notReady) {
+            return -1;
+        }
+        Integer k = KEYS.get(t);
+        if (k != null) return k;
+        Mirror m = MIRRORS.get(t);
+        if (m != null) return m.key;
+        if (UNKNOWN_LOGGED.add(t.getLabel())) {
+            LOG.info("[UltraCraft] gui: texture '{}' ({}x{}) is not mirrored; its quads are skipped",
+                    t.getLabel(), t.getWidth(0), t.getHeight(0));
+        }
+        return -1;
+    }
+
+    // Reflection into BitmapProvider's private glyph types (package-private record + holder).
+    private static Field outerField, imageField;
+    private static Method offX, offY, gw, gh, imageData;
+
+    /** From FontTextureMixin, for every glyph placed on a font sheet. */
+    public static synchronized void onGlyphUpload(GlyphBitmap bitmap, int x, int y, GpuTexture tex) {
+        Mirror m = MIRRORS.computeIfAbsent(tex, t -> new Mirror(nextKey++, t.getWidth(0), t.getHeight(0)));
+        try {
+            Class<?> c = bitmap.getClass();
+            if (!c.getName().startsWith("net.minecraft.client.gui.font.providers.BitmapProvider$Glyph")) {
+                if (UNSUPPORTED_LOGGED.add(c)) LOG.info("[UltraCraft] gui: glyph bitmap type {} not mirrored yet", c.getName());
+                return;
+            }
+            if (outerField == null) {
+                outerField = c.getDeclaredField("this$0");
+                outerField.setAccessible(true);
+                Class<?> g = outerField.getType();
+                offX = g.getDeclaredMethod("offsetX"); offY = g.getDeclaredMethod("offsetY");
+                gw = g.getDeclaredMethod("width"); gh = g.getDeclaredMethod("height");
+                imageData = g.getDeclaredMethod("imageData");
+                for (Method mm : new Method[] {offX, offY, gw, gh, imageData}) mm.setAccessible(true);
+                imageField = imageData.getReturnType().getDeclaredField("image");
+                imageField.setAccessible(true);
+            }
+            Object glyph = outerField.get(bitmap);
+            int ox = (int) offX.invoke(glyph), oy = (int) offY.invoke(glyph);
+            int w = (int) gw.invoke(glyph), h = (int) gh.invoke(glyph);
+            NativeImage img = (NativeImage) imageField.get(imageData.invoke(glyph));
+            for (int j = 0; j < h; j++) {
+                int ty = y + j;
+                if (ty < 0 || ty >= m.h) continue;
+                for (int i = 0; i < w; i++) {
+                    int tx = x + i;
+                    if (tx < 0 || tx >= m.w) continue;
+                    int argb = img.getPixel(ox + i, oy + j);
+                    int o = (ty * m.w + tx) * 4;
+                    m.rgba[o] = (byte) (argb >> 16);
+                    m.rgba[o + 1] = (byte) (argb >> 8);
+                    m.rgba[o + 2] = (byte) argb;
+                    m.rgba[o + 3] = (byte) (argb >>> 24);
+                }
+            }
+            m.dirty(x, y, w, h);
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            if (UNSUPPORTED_LOGGED.add(bitmap.getClass())) LOG.warn("[UltraCraft] gui: glyph mirror failed: {}", e.toString());
+        }
+    }
+
+    /** Everything again (ULTRAKILL resynced). */
+    public static synchronized void resendAll() {
+        for (Mirror m : MIRRORS.values()) m.full = true;
+    }
+
+    /** Send new sheets whole and changed regions as patches. Render thread, while ULTRAKILL is live. */
+    public static synchronized void flush(Stream stream) {
+        for (Mirror m : MIRRORS.values()) {
+            int x0, y0, x1, y1;
+            if (m.full) { x0 = 0; y0 = 0; x1 = m.w; y1 = m.h; }
+            else if (m.dx1 > m.dx0) { x0 = m.dx0; y0 = m.dy0; x1 = m.dx1; y1 = m.dy1; }
+            else continue;
+            int pw = x1 - x0, ph = y1 - y0;
+            ByteBuffer h = ByteBuffer.allocate(28).order(ByteOrder.LITTLE_ENDIAN)
+                    .putInt(m.key).putInt(m.w).putInt(m.h).putInt(x0).putInt(y0).putInt(pw).putInt(ph).flip();
+            ByteBuffer px = ByteBuffer.allocate(pw * ph * 4);
+            for (int j = 0; j < ph; j++) px.put(m.rgba, ((y0 + j) * m.w + x0) * 4, pw * 4);
+            px.flip();
+            if (!stream.tryWrite(Protocol.STREAM_MSG_TEXTURE, h, px)) return;   // ring full: retry next frame
+            m.full = false;
+            m.dx0 = m.dy0 = Integer.MAX_VALUE;
+            m.dx1 = m.dy1 = -1;
+        }
+    }
+}
