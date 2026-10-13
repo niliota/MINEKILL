@@ -189,6 +189,7 @@ public class UltraCraftClient implements ClientModInitializer {
         if (ukAlive) worldModels.frame(mc, bridge);
         if (ukAlive) collisionInterest.frame(mc, bridge);
         if (ukAlive && stream != null && stream.ok()) dev.ultracraft.gui.GuiTextures.flush(stream);
+        if (ukAlive && stream != null && stream.ok() && mc.level != null) dev.ultracraft.render.AtlasAnimator.INSTANCE.frame(mc, stream);
 
         if (++ticks % 200 == 0) {
             LOG.info("[UltraCraft] tick {}: uk pid {} hb {} flags {} dropped {} | {}",

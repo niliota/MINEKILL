@@ -101,6 +101,7 @@ public final class WorldMesher {
         if (!sendExtraAtlas(mc, net.minecraft.data.AtlasIds.GUI, Protocol.STREAM_ATLAS_GUI)) return false;
         if (!sendGuiSprites(mc)) return false;
         dev.ultracraft.gui.GuiTextures.resendAll();   // font sheets too
+        AtlasAnimator.INSTANCE.resend();              // fresh atlases carry first frames again
         LOG.info("[UltraCraft] world: sent {}x{} block atlas ({} MB) for resync request {}",
                 atlas.width, atlas.height, atlas.width * atlas.height * 4 / (1024 * 1024), servedRequest);
 

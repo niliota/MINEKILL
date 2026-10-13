@@ -24,7 +24,13 @@
     "GameRendererMixin",
     "HandRendererMixin",
     "PictureInPictureRendererMixin",
-    "LevelRendererMixin"
+    "LevelRendererMixin",
+    "PathContextMixin",
+    "WalkNodeEvaluatorMixin",
+    "PathNavigationMixin",
+    "GoalUtilsMixin",
+    "AbstractArrowMixin",
+    "ProjectileUtilMixin"
   ],
   "injectors": {
     "defaultRequire": 1

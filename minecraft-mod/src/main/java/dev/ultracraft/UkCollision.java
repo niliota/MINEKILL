@@ -149,6 +149,53 @@ public final class UkCollision {
         return added;
     }
 
+    /** Horizontal margin for the pathfinding questions: a box clipping a cell's edge does not count. */
+    private static final double PATH_MARGIN = 0.2;
+    /** A floor this thin at the top of a cell is the cell above's floor, not a wall in this one. */
+    private static final double PATH_SLIVER = 0.2;
+
+    /**
+     * Pathfinding: does ULTRAKILL's geometry fill block cell (x,y,z), the way a solid block
+     * would? Checked without allocating (pathfinding asks this thousands of times per path).
+     */
+    public static boolean blocksCell(int x, int y, int z) {
+        Snapshot s = current;
+        if (s.boxes.length == 0) return false;
+        double x0 = x + PATH_MARGIN, x1 = x + 1 - PATH_MARGIN, z0 = z + PATH_MARGIN, z1 = z + 1 - PATH_MARGIN;
+        double y0 = y + PATH_SLIVER, y1 = y + 1 - 0.01;
+        for (int i : s.big) if (overlaps(s.boxes[i], x0, y0, z0, x1, y1, z1)) return true;
+        int[] list = s.grid.get(cellKey(Math.floorDiv(x, CELL), Math.floorDiv(z, CELL)));
+        if (list != null) for (int i : list) if (overlaps(s.boxes[i], x0, y0, z0, x1, y1, z1)) return true;
+        return false;
+    }
+
+    /**
+     * Pathfinding: the highest ULTRAKILL surface in column (x,z) between {@code yMin} and
+     * {@code yMax}, or NaN. Minecraft's floor level comes from the block below's collision shape,
+     * which is empty over an ULTRAKILL floor.
+     */
+    public static double topIn(int x, int z, double yMin, double yMax) {
+        Snapshot s = current;
+        double best = Double.NaN;
+        if (s.boxes.length == 0) return best;
+        double x0 = x + PATH_MARGIN, x1 = x + 1 - PATH_MARGIN, z0 = z + PATH_MARGIN, z1 = z + 1 - PATH_MARGIN;
+        for (int pass = 0; pass < 2; pass++) {
+            int[] list = pass == 0 ? s.big : s.grid.get(cellKey(Math.floorDiv(x, CELL), Math.floorDiv(z, CELL)));
+            if (list == null) continue;
+            for (int i : list) {
+                AABB b = s.boxes[i];
+                if (b.maxX <= x0 || b.minX >= x1 || b.maxZ <= z0 || b.minZ >= z1) continue;
+                if (b.maxY <= yMin || b.maxY > yMax) continue;
+                if (Double.isNaN(best) || b.maxY > best) best = b.maxY;
+            }
+        }
+        return best;
+    }
+
+    private static boolean overlaps(AABB b, double x0, double y0, double z0, double x1, double y1, double z1) {
+        return b.maxX > x0 && b.minX < x1 && b.maxY > y0 && b.minY < y1 && b.maxZ > z0 && b.minZ < z1;
+    }
+
     /** Called by the mixin each time it actually added a shape. Diagnostics only. */
     public static void countInjection() {
         injections++;   // racy across threads, which is fine for a rough counter
@@ -194,7 +241,15 @@ public final class UkCollision {
 
     /** True if any ULTRAKILL box overlaps {@code box} (strictly, like AABB.intersects). */
     public static boolean intersectsAny(AABB box) {
-        for (AABB b : current.boxes) if (b.intersects(box)) return true;
+        Snapshot s = current;
+        for (int i : s.big) if (s.boxes[i].intersects(box)) return true;
+        int x0 = Math.floorDiv((int) Math.floor(box.minX), CELL), x1 = Math.floorDiv((int) Math.floor(box.maxX), CELL);
+        int z0 = Math.floorDiv((int) Math.floor(box.minZ), CELL), z1 = Math.floorDiv((int) Math.floor(box.maxZ), CELL);
+        for (int cx = x0; cx <= x1; cx++)
+            for (int cz = z0; cz <= z1; cz++) {
+                int[] list = s.grid.get(cellKey(cx, cz));
+                if (list != null) for (int i : list) if (s.boxes[i].intersects(box)) return true;
+            }
         return false;
     }
 
