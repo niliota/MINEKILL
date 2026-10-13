@@ -80,6 +80,13 @@ namespace UltraCraft
         private readonly List<Vector2> _puv = new List<Vector2>();
         private readonly List<Color32> _pc = new List<Color32>();
         private readonly List<int> _pt = new List<int>();
+        /// <summary>
+        /// The vertex-lit cutout material (solid layer's Master clone + alpha test). Particles always
+        /// use it, independent of the blocks' cutout choice: it is what gives them ULTRAKILL's
+        /// lighting and fog plus Minecraft's tint, i.e. the same shading as solid blocks
+        /// (user, 2026-10-13: "add shading to the particles like you did with the blocks").
+        /// </summary>
+        private Material _litCutout;
 
         // Minecraft's block outline (SELECTION slot), drawn as lines under the root.
         private GameObject _outline;
@@ -364,10 +371,12 @@ namespace UltraCraft
             _particleMesh.SetUVs(0, _puv);
             _particleMesh.SetColors(_pc);
             _particleMesh.SetTriangles(_pt, 0);
+            // Facing the camera: the vertex lighting then shades each particle by the scene
+            // lights around it, as a camera-facing sprite should be.
             _particleMesh.RecalculateNormals();
             _particleMesh.RecalculateBounds();
             var mr = _particles.GetComponent<MeshRenderer>();
-            Material m = _mats[Cutout] != null ? _mats[Cutout] : _fallback;
+            Material m = _litCutout != null ? _litCutout : _mats[Cutout] != null ? _mats[Cutout] : _fallback;
             if (mr.sharedMaterial != m) mr.sharedMaterial = m;
             if (!_particles.activeSelf) _particles.SetActive(true);
         }
@@ -514,6 +523,7 @@ namespace UltraCraft
             if (_candidates[Cutout].Count == before) return;
             Material m = _candidates[Cutout][_candidates[Cutout].Count - 1];
             m.name = $"{MasterShader} clone of '{opaque.name}' + alpha test";
+            _litCutout = m;
             m.renderQueue = cutout.renderQueue;
             foreach (string prop in new[] { "_BlendMode", "_SrcBlend", "_DstBlend", "_ZWrite" })
                 if (m.HasProperty(prop) && cutout.HasProperty(prop)) m.SetFloat(prop, cutout.GetFloat(prop));
