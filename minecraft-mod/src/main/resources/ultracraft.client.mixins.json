@@ -23,7 +23,8 @@
     "RenderSetupAccessor",
     "GameRendererMixin",
     "HandRendererMixin",
-    "PictureInPictureRendererMixin"
+    "PictureInPictureRendererMixin",
+    "LevelRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1

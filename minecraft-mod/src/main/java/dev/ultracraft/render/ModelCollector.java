@@ -52,8 +52,10 @@ public final class ModelCollector implements SubmitNodeCollector {
     private final List<Quad> quads = new ArrayList<>();
     private final Matrix4f post = new Matrix4f();
     private final Vector3f light0 = new Vector3f(), light1 = new Vector3f();
-    private boolean useLightCoords, perspective;
+    private boolean useLightCoords, perspective, unlit;
     private final QuadBuilder builder = new QuadBuilder();
+    /** When non-null, one line per submission (render type, texture key, quads) for diagnostics. */
+    public StringBuilder report;
 
     /** Start collecting: positions through {@code post}, lights in the normals' space. */
     public void begin(Matrix4fc post, Vector3fc light0, Vector3fc light1, boolean useLightCoords) {
@@ -71,8 +73,12 @@ public final class ModelCollector implements SubmitNodeCollector {
         this.perspective = perspective;
         quads.clear();
         this.post.set(post);
-        this.light0.set(light0).normalize();
-        this.light1.set(light1).normalize();
+        // Zero lights: unlit (ULTRAKILL lights the geometry itself).
+        unlit = light0.lengthSquared() == 0 && light1.lengthSquared() == 0;
+        if (!unlit) {
+            this.light0.set(light0).normalize();
+            this.light1.set(light1).normalize();
+        }
         this.useLightCoords = useLightCoords;
     }
 
@@ -93,6 +99,11 @@ public final class ModelCollector implements SubmitNodeCollector {
         quads.add(q);
     }
 
+    /** The quads in submission order. */
+    public List<Quad> quads() {
+        return quads;
+    }
+
     /** The quads, far first (smaller z is farther: true for GUI space and for view space). */
     public List<Quad> sortedQuads() {
         quads.sort((a, b) -> Float.compare(a.depth, b.depth));
@@ -102,6 +113,7 @@ public final class ModelCollector implements SubmitNodeCollector {
     // ---- lighting -------------------------------------------------------------
 
     private float shade(float nx, float ny, float nz) {
+        if (unlit) return 1f;
         float len = (float) Math.sqrt(nx * nx + ny * ny + nz * nz);
         if (len < 1e-6f) return 1f;
         nx /= len; ny /= len; nz /= len;
@@ -160,12 +172,18 @@ public final class ModelCollector implements SubmitNodeCollector {
     public <S> void submitModel(Model<? super S> model, S state, PoseStack poseStack, RenderType type, int light, int overlay,
                                 int tint, UvMapping uvMapping, int outline) {
         int tex = texKey(type);
-        if (tex < 0) return;
+        if (tex < 0) {
+            if (report != null) report.append("\n  model ").append(model.getClass().getSimpleName()).append(' ').append(type).append(" -> no texture, skipped");
+            return;
+        }
+        int before = quads.size();
         builder.start(tex, brightness(light));
         VertexConsumer buffer = uvMapping != null ? uvMapping.wrap(builder) : builder;
         model.setupAnim(state);
         model.renderToBuffer(poseStack, buffer, light, overlay, tint);
         builder.finish();
+        if (report != null) report.append("\n  model ").append(model.getClass().getSimpleName()).append(' ').append(type)
+                .append(" tex=").append(tex).append(" tint=").append(Integer.toHexString(tint)).append(" quads=").append(quads.size() - before);
     }
 
     /** Groups a model's vertices (already posed by renderToBuffer) into lit quads. */

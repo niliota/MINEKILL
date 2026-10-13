@@ -4,9 +4,9 @@ package dev.ultracraft.bridge;
 
 public final class Protocol {
     public static final int MAGIC = 0x55544C52;
-    public static final int VERSION = 1;
+    public static final int VERSION = 604791699;   // layout fingerprint
     public static final int HEADER_SIZE = 56;
-    public static final int TOTAL_SIZE = 1200608;
+    public static final int TOTAL_SIZE = 1659384;
     public static final int SEQ_SIZE = 4;
 
     public static final int FLAG_UK_MOVEMENT = 1;
@@ -18,24 +18,24 @@ public final class Protocol {
     public static final int OFFSET_PLAYER = 56;
     public static final int SLOTPLAYER_SIZE = 71;
     public static final int OFFSET_CAMERA = 128;
-    public static final int SLOTCAMERA_SIZE = 24;
-    public static final int OFFSET_INPUT = 152;
+    public static final int SLOTCAMERA_SIZE = 32;
+    public static final int OFFSET_INPUT = 160;
     public static final int SLOTINPUT_SIZE = 50;
-    public static final int OFFSET_CORRECTION = 208;
+    public static final int OFFSET_CORRECTION = 216;
     public static final int SLOTCORRECTION_SIZE = 44;
-    public static final int OFFSET_LEVEL = 256;
+    public static final int OFFSET_LEVEL = 264;
     public static final int SLOTLEVEL_SIZE = 60;
-    public static final int OFFSET_SELECTION = 320;
+    public static final int OFFSET_SELECTION = 328;
     public static final int SLOTSELECTION_SIZE = 36;
-    public static final int OFFSET_MC_EVENTS = 356;
-    public static final int RINGMCEVENTS_OFFSET = 356;
+    public static final int OFFSET_MC_EVENTS = 364;
+    public static final int RINGMCEVENTS_OFFSET = 364;
     public static final int RINGMCEVENTS_CAPACITY = 256;
     public static final int RINGMCEVENTS_RECORD_SIZE = 24;
     public static final int RINGMCEVENTS_OFF_HEAD = 0;
     public static final int RINGMCEVENTS_OFF_TAIL = 4;
     public static final int RINGMCEVENTS_OFF_RECORDS = 8;
-    public static final int OFFSET_UK_EVENTS = 6508;
-    public static final int RINGUKEVENTS_OFFSET = 6508;
+    public static final int OFFSET_UK_EVENTS = 6516;
+    public static final int RINGUKEVENTS_OFFSET = 6516;
     public static final int RINGUKEVENTS_CAPACITY = 256;
     public static final int RINGUKEVENTS_RECORD_SIZE = 24;
     public static final int RINGUKEVENTS_OFF_HEAD = 0;
@@ -95,13 +95,17 @@ public final class Protocol {
         public static final int OFF_PITCH = 8;   // Minecraft degrees
         public static final int OFF_FOV = 12;     // Minecraft FOV, for the debug overlay only
         public static final int OFF_EYEHEIGHT = 16; // blocks from the feet to the eye, current pose (1.62 standing, lower sneaking)
-        public static final int OFF_SEQ_END = 20;
-        public static final int SIZE = 24;
+        public static final int OFF_CAMERATYPE = 20; // F5 perspective: 0 first person, 1 third person behind, 2 third person in front
+        public static final int OFF_CAMERADISTANCE = 24; // third person: blocks from the eye to Minecraft's camera (already clipped by Minecraft's blocks)
+        public static final int OFF_SEQ_END = 28;
+        public static final int SIZE = 32;
 
         public float yaw;
         public float pitch;
         public float fov;
         public float eyeHeight;
+        public int cameraType;
+        public float cameraDistance;
     }
 
     public static final class SlotInput {
@@ -291,6 +295,7 @@ public final class Protocol {
     public static final int GUI_TEX_GUI = 1;  // Minecraft's GUI atlas
     public static final int GUI_TEX_BLOCKS = 2;  // block atlas
     public static final int GUI_TEX_ITEMS = 3;  // item atlas
+    public static final int MODEL_TEX_MULTIPLY = 16777216;  // WORLD_MODELS tex flag: multiply-blend decal (block-breaking cracks: Minecraft blends them as dst * src * 2)
     public static final int GUI_TEX_DYNAMIC_BASE = 16;  // first key of textures mirrored through STREAM_MSG_TEXTURE (font sheets)
     public static final int STREAM_ATLAS_ITEMS = 1;
     public static final int STREAM_ATLAS_GUI = 2;
@@ -302,7 +307,7 @@ public final class Protocol {
     public static final int STREAM_VTX_OFF_FLAGS = 24;  // u32: bits 0-3 block light, 8-11 sky light, 16 translucent, 17 cutout (neither = solid)
 
     // Tables: one seqlock over a header and a list of fixed-size records.
-    public static final int TBL_COLLISION_OFFSET = 12664;  // ULTRAKILL -> Minecraft: ULTRAKILL collision boxes near the player, already in Minecraft block coords
+    public static final int TBL_COLLISION_OFFSET = 12672;  // ULTRAKILL -> Minecraft: ULTRAKILL collision boxes near the player, already in Minecraft block coords
     public static final int TBL_COLLISION_SIZE = 98328;
     public static final int TBL_COLLISION_CAPACITY = 4096;
     public static final int TBL_COLLISION_OFF_SEQ = 0;  // seqlock, odd while writing
@@ -317,7 +322,7 @@ public final class Protocol {
     public static final int TBL_COLLISION_REC_OFF_MAXX = 12;
     public static final int TBL_COLLISION_REC_OFF_MAXY = 16;
     public static final int TBL_COLLISION_REC_OFF_MAXZ = 20;
-    public static final int TBL_GUI_OFFSET = 110992;  // Minecraft -> ULTRAKILL: every quad Minecraft's GUI draws this frame (HUD, text, items), in draw order, for ULTRAKILL to replay
+    public static final int TBL_GUI_OFFSET = 111000;  // Minecraft -> ULTRAKILL: every quad Minecraft's GUI draws this frame (HUD, text, items), in draw order, for ULTRAKILL to replay
     public static final int TBL_GUI_SIZE = 786472;
     public static final int TBL_GUI_CAPACITY = 32768;
     public static final int TBL_GUI_OFF_SEQ = 0;  // seqlock, odd while writing
@@ -336,7 +341,7 @@ public final class Protocol {
     public static final int TBL_GUI_REC_OFF_V = 12;
     public static final int TBL_GUI_REC_OFF_RGBA = 16;  // colour, r in the low byte
     public static final int TBL_GUI_REC_OFF_TEX = 20;  // GUI_TEX_* key
-    public static final int TBL_HAND_OFFSET = 897464;  // Minecraft -> ULTRAKILL: Minecraft's first-person hands and held items this frame: posed, lit quads in Minecraft view space (camera looks down -z, y up), far first
+    public static final int TBL_HAND_OFFSET = 897472;  // Minecraft -> ULTRAKILL: Minecraft's first-person hands and held items this frame: posed, lit quads in Minecraft view space (camera looks down -z, y up), far first
     public static final int TBL_HAND_SIZE = 229400;
     public static final int TBL_HAND_CAPACITY = 8192;
     public static final int TBL_HAND_OFF_SEQ = 0;  // seqlock, odd while writing
@@ -352,7 +357,22 @@ public final class Protocol {
     public static final int TBL_HAND_REC_OFF_V = 16;
     public static final int TBL_HAND_REC_OFF_RGBA = 20;  // colour with lighting applied, r in the low byte
     public static final int TBL_HAND_REC_OFF_TEX = 24;  // GUI_TEX_* key
-    public static final int TBL_PARTICLES_OFFSET = 1126864;  // Minecraft -> ULTRAKILL: Minecraft's live block particles (TerrainParticle), interpolated, for ULTRAKILL to draw as billboards
+    public static final int TBL_WORLD_MODELS_OFFSET = 1126872;  // Minecraft -> ULTRAKILL: posed model geometry in the world this frame (the player in third person, block-breaking cracks), unlit, in Minecraft block coords
+    public static final int TBL_WORLD_MODELS_SIZE = 458768;
+    public static final int TBL_WORLD_MODELS_CAPACITY = 16384;
+    public static final int TBL_WORLD_MODELS_OFF_SEQ = 0;  // seqlock, odd while writing
+    public static final int TBL_WORLD_MODELS_OFF_TICKTIMESTAMP = 4;  // epoch ms of the frame
+    public static final int TBL_WORLD_MODELS_OFF_COUNT = 12;  // valid vertices; 4 per quad, counter-clockwise front as in Minecraft
+    public static final int TBL_WORLD_MODELS_OFF_RECORDS = 16;
+    public static final int TBL_WORLD_MODELS_RECORD_SIZE = 28;
+    public static final int TBL_WORLD_MODELS_REC_OFF_X = 0;  // Minecraft block coords
+    public static final int TBL_WORLD_MODELS_REC_OFF_Y = 4;
+    public static final int TBL_WORLD_MODELS_REC_OFF_Z = 8;
+    public static final int TBL_WORLD_MODELS_REC_OFF_U = 12;  // texture coordinates
+    public static final int TBL_WORLD_MODELS_REC_OFF_V = 16;
+    public static final int TBL_WORLD_MODELS_REC_OFF_RGBA = 20;  // tint, r in the low byte
+    public static final int TBL_WORLD_MODELS_REC_OFF_TEX = 24;  // GUI_TEX_* key
+    public static final int TBL_PARTICLES_OFFSET = 1585640;  // Minecraft -> ULTRAKILL: Minecraft's live block particles (TerrainParticle), interpolated, for ULTRAKILL to draw as billboards
     public static final int TBL_PARTICLES_SIZE = 73744;
     public static final int TBL_PARTICLES_CAPACITY = 2048;
     public static final int TBL_PARTICLES_OFF_SEQ = 0;  // seqlock, odd while writing

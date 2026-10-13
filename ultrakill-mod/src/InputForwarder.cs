@@ -85,7 +85,7 @@ namespace UltraCraft
         }
 
         /// <summary>Outside Minecraft screens, only these go to Minecraft as key events.</summary>
-        private static readonly KeyCode[] GameplayKeys = { KeyCode.T, KeyCode.Slash, KeyCode.E, KeyCode.Q, KeyCode.BackQuote };
+        private static readonly KeyCode[] GameplayKeys = { KeyCode.T, KeyCode.Slash, KeyCode.E, KeyCode.Q, KeyCode.BackQuote, KeyCode.F5 };
         /// <summary>Held editing keys repeat inside screens, like typing in Minecraft's own window.</summary>
         private static readonly KeyCode[] RepeatKeys =
             { KeyCode.Backspace, KeyCode.Delete, KeyCode.LeftArrow, KeyCode.RightArrow, KeyCode.UpArrow, KeyCode.DownArrow };

@@ -86,6 +86,8 @@ namespace UltraCraft.Bridge
 
         public bool Connected { get; private set; }
         public string LastError { get; private set; }
+        /// <summary>Something worth logging from Open (e.g. a file from another build was re-laid), or null.</summary>
+        public string Notice { get; private set; }
         public string Path => _path;
 
         public BridgeTransport(string path)
@@ -144,6 +146,17 @@ namespace UltraCraft.Bridge
                 _view = _mmf.CreateViewAccessor(0, Protocol.TOTAL_SIZE,
                                                 MemoryMappedFileAccess.ReadWrite);
 
+                uint found = _view.ReadUInt32(H_VERSION);
+                if (_view.ReadUInt32(H_MAGIC) != 0 && found != Protocol.VERSION)
+                {
+                    // Laid out by another build (VERSION is a fingerprint of the layout). Its
+                    // ring counters and slots sit at old offsets and read as garbage here, so
+                    // the file is wiped and re-laid; the other game re-opens it as fresh.
+                    var zeros = new byte[65536];
+                    for (int off = 0; off < Protocol.TOTAL_SIZE; off += zeros.Length)
+                        _view.WriteArray(off, zeros, 0, Math.Min(zeros.Length, Protocol.TOTAL_SIZE - off));
+                    Notice = $"bridge file was laid out by another build (version {found}, this build {Protocol.VERSION}): wiped and re-laid";
+                }
                 if (_view.ReadUInt32(H_MAGIC) == 0)
                 {
                     // Fresh file: lay down the header ourselves.
@@ -462,6 +475,27 @@ namespace UltraCraft.Bridge
                 _view.ReadArray(b, dst, 0, bytes);
                 Thread.MemoryBarrier();
                 if (_view.ReadUInt32(b + Protocol.TBL_GUI_OFF_SEQ) == s1) return count;
+            }
+            return -1;
+        }
+
+        /// <summary>Copy the WORLD_MODELS table (header + records) into dst under its seqlock; returns the vertex count or -1.</summary>
+        public int ReadWorldModelsTable(byte[] dst)
+        {
+            if (!Connected) return -1;
+            int b = Protocol.TBL_WORLD_MODELS_OFFSET;
+            for (int attempt = 0; attempt < 3; attempt++)
+            {
+                uint s1 = _view.ReadUInt32(b + Protocol.TBL_WORLD_MODELS_OFF_SEQ);
+                if ((s1 & 1) != 0) { Thread.SpinWait(16); continue; }
+                Thread.MemoryBarrier();
+                int count = (int)_view.ReadUInt32(b + Protocol.TBL_WORLD_MODELS_OFF_COUNT);
+                if (count < 0 || count > Protocol.TBL_WORLD_MODELS_CAPACITY) continue;
+                int bytes = Protocol.TBL_WORLD_MODELS_OFF_RECORDS + count * Protocol.TBL_WORLD_MODELS_RECORD_SIZE;
+                if (dst.Length < bytes) return -1;
+                _view.ReadArray(b, dst, 0, bytes);
+                Thread.MemoryBarrier();
+                if (_view.ReadUInt32(b + Protocol.TBL_WORLD_MODELS_OFF_SEQ) == s1) return count;
             }
             return -1;
         }

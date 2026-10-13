@@ -98,6 +98,12 @@ final class PlayerPublisher {
         // The crosshair ray starts at getEyePosition = feet + getEyeHeight(). ULTRAKILL puts its
         // camera there, so the line you look down is the line Minecraft raycasts.
         cam.eyeHeight = p.getEyeHeight();
+        // F5: which perspective, and how far Minecraft's own camera sits from the eye (its
+        // distance after clipping against Minecraft's blocks; ULTRAKILL clips against its own).
+        var type = mc.options.getCameraType();
+        cam.cameraType = type.isFirstPerson() ? 0 : type.isMirrored() ? 2 : 1;
+        cam.cameraDistance = cam.cameraType == 0 ? 0f
+                : (float) mc.gameRenderer.mainCamera().position().distanceTo(p.getEyePosition(mc.getDeltaTracker().getGameTimeDeltaPartialTick(true)));
         // FOV is only carried for diagnostics. 26.3 wraps it in an OptionInstance
         // reached via Options.fov(); the old public field no longer exists.
         cam.fov = 70f;

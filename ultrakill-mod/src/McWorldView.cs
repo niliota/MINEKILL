@@ -73,6 +73,16 @@ namespace UltraCraft
         private int _sectionsReceived;
 
         // Minecraft's block particles (PARTICLES table), camera-facing quads in world space.
+        private GameObject _models;
+        private Mesh _modelMesh;
+        private readonly byte[] _modelBytes = new byte[Protocol.TBL_WORLD_MODELS_OFF_RECORDS + Protocol.TBL_WORLD_MODELS_CAPACITY * Protocol.TBL_WORLD_MODELS_RECORD_SIZE];
+        private readonly Dictionary<int, Material> _modelMats = new Dictionary<int, Material>();
+        private readonly List<Vector3> _mv = new List<Vector3>();
+        private readonly List<Vector2> _muv = new List<Vector2>();
+        private readonly List<Color32> _mc = new List<Color32>();
+        private readonly List<int> _mkeys = new List<int>();
+        private readonly Dictionary<int, List<int>> _mtris = new Dictionary<int, List<int>>();
+        private readonly List<Material> _mmats = new List<Material>();
         private GameObject _particles;
         private Mesh _particleMesh;
         private readonly byte[] _particleBytes = new byte[Protocol.TBL_PARTICLES_CAPACITY * Protocol.TBL_PARTICLES_RECORD_SIZE];
@@ -434,6 +444,8 @@ namespace UltraCraft
         public void LateTick()
         {
             if (!_root.activeSelf || _atlas == null) { if (_particles != null) _particles.SetActive(false); return; }
+            EnsureFallback();
+            UpdateModels();
             int n = _bridge.ReadParticleTable(_particleBytes);
             if (n < 0) return;                                // writer busy: keep last frame's
             if (_particles == null) CreateParticles();
@@ -483,6 +495,165 @@ namespace UltraCraft
             Material m = _litCutout != null ? _litCutout : _mats[Cutout] != null ? _mats[Cutout] : _fallback;
             if (mr.sharedMaterial != m) mr.sharedMaterial = m;
             if (!_particles.activeSelf) _particles.SetActive(true);
+        }
+
+        /// <summary>
+        /// Minecraft's world models (the player's body in third person, block-breaking cracks):
+        /// quads in Minecraft block coords, so the mesh sits under the root like the sections,
+        /// with the sections' triangle order. One submesh per texture, each with a clone of the
+        /// blocks' vertex-lit cutout material, so ULTRAKILL's lights shade them like the blocks.
+        /// </summary>
+        private void UpdateModels()
+        {
+            int n = _bridge.ReadWorldModelsTable(_modelBytes);
+            if (n < 0) return;                                // writer busy: keep last frame's
+            if (n > 0 && DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - BitConverter.ToInt64(_modelBytes, Protocol.TBL_WORLD_MODELS_OFF_TICKTIMESTAMP) > 2000)
+                n = 0;
+            if (_models == null)
+            {
+                _modelMesh = new Mesh { name = "UltraCraft.WorldModels", hideFlags = HideFlags.HideAndDontSave };
+                _modelMesh.MarkDynamic();
+                _models = new GameObject("UltraCraft.WorldModels") { hideFlags = HideFlags.HideAndDontSave, layer = RenderLayer };
+                _models.transform.SetParent(_root.transform, false);
+                _models.AddComponent<MeshFilter>().sharedMesh = _modelMesh;
+                var r = _models.AddComponent<MeshRenderer>();
+                r.shadowCastingMode = ShadowCastingMode.Off;
+                r.receiveShadows = false;
+            }
+            if (n == 0) { if (_models.activeSelf) _models.SetActive(false); return; }
+
+            EnsureMultiplyShader();
+            _mv.Clear(); _muv.Clear(); _mc.Clear(); _mkeys.Clear();
+            foreach (var l in _mtris.Values) l.Clear();
+            int r0 = Protocol.TBL_WORLD_MODELS_OFF_RECORDS, rs = Protocol.TBL_WORLD_MODELS_RECORD_SIZE;
+            for (int q = 0; q + 3 < n; q += 4)
+            {
+                int key = BitConverter.ToInt32(_modelBytes, r0 + q * rs + Protocol.TBL_WORLD_MODELS_REC_OFF_TEX);
+                if (GuiTexture(key & 0xFFFFFF) == null) continue;
+                bool multiply = (key & Protocol.MODEL_TEX_MULTIPLY) != 0;
+                if (multiply && _multiplyShader == null) continue;
+                if (!_mtris.TryGetValue(key, out List<int> tris)) _mtris[key] = tris = new List<int>();
+                if (tris.Count == 0) _mkeys.Add(key);
+                int b = _mv.Count;
+                for (int k = 0; k < 4; k++)
+                {
+                    int o = r0 + (q + k) * rs;
+                    _mv.Add(new Vector3(BitConverter.ToSingle(_modelBytes, o + Protocol.TBL_WORLD_MODELS_REC_OFF_X),
+                                        BitConverter.ToSingle(_modelBytes, o + Protocol.TBL_WORLD_MODELS_REC_OFF_Y),
+                                        BitConverter.ToSingle(_modelBytes, o + Protocol.TBL_WORLD_MODELS_REC_OFF_Z)));
+                    _muv.Add(new Vector2(BitConverter.ToSingle(_modelBytes, o + Protocol.TBL_WORLD_MODELS_REC_OFF_U),
+                                         BitConverter.ToSingle(_modelBytes, o + Protocol.TBL_WORLD_MODELS_REC_OFF_V)));
+                    int c = o + Protocol.TBL_WORLD_MODELS_REC_OFF_RGBA;
+                    // Multiply (Double) computes 2 * tex * colour, then blends 2 * dst * that; a
+                    // half-grey vertex colour makes it exactly Minecraft's crack blend, dst * tex * 2.
+                    _mc.Add(multiply ? (_multiplyDouble ? new Color32(128, 128, 128, 255) : new Color32(255, 255, 255, 255))
+                                     : new Color32(_modelBytes[c], _modelBytes[c + 1], _modelBytes[c + 2], _modelBytes[c + 3]));
+                }
+                tris.Add(b); tris.Add(b + 1); tris.Add(b + 2);
+                tris.Add(b); tris.Add(b + 2); tris.Add(b + 3);
+            }
+            if (_mkeys.Count == 0) { if (_models.activeSelf) _models.SetActive(false); return; }
+
+            _modelMesh.Clear();
+            if (_mv.Count > 65535) _modelMesh.indexFormat = IndexFormat.UInt32;
+            _modelMesh.SetVertices(_mv);
+            _modelMesh.SetUVs(0, _muv);
+            _modelMesh.SetColors(_mc);
+            _modelMesh.subMeshCount = _mkeys.Count;
+            _mmats.Clear();
+            for (int i = 0; i < _mkeys.Count; i++)
+            {
+                _modelMesh.SetTriangles(_mtris[_mkeys[i]], i);
+                _mmats.Add(ModelMaterial(_mkeys[i]));
+            }
+            _modelMesh.RecalculateNormals();
+            _modelMesh.RecalculateBounds();
+            _models.GetComponent<MeshRenderer>().sharedMaterials = _mmats.ToArray();
+            if (!_models.activeSelf) _models.SetActive(true);
+        }
+
+        private Material _modelTemplate;
+
+        /// <summary>
+        /// The material entity models (skins with transparent outer layers) are drawn with. The
+        /// vertex-lit cutout clone switches ALPHA_TEST on in a material whose shader variant was
+        /// compiled without it, so Unity falls back to a variant that never discards: a skin's
+        /// transparent pixels drew opaque black. ULTRAKILL/Master has no cutoff property; the
+        /// cutout behaviour lives entirely in compiled variants. So this takes a material ULTRAKILL
+        /// itself alpha-tests with: preferably one that is also vertex-lit, otherwise any
+        /// alpha-tested one (enemies' cutout parts), cleaned of level effects like the others.
+        /// </summary>
+        private void BuildModelTemplate(List<Material> masters)
+        {
+            bool Has(Material m, string k) => m.IsKeywordEnabled(k);
+            Material t = masters.FirstOrDefault(m => Has(m, "ALPHA_TEST") && Has(m, "VERTEX_LIGHTING"))
+                      ?? masters.FirstOrDefault(m => Has(m, "ALPHA_TEST"));
+            if (t == null) { _log.LogInfo("world: no alpha-tested ULTRAKILL/Master material loaded; models use the lit cutout"); return; }
+            var m2 = new Material(t) { hideFlags = HideFlags.HideAndDontSave, name = $"{MasterShader} model clone of '{t.name}'" };
+            foreach (string k in m2.shaderKeywords)
+            {
+                bool keep = k == "ALPHA_TEST" || k == "VERTEX_LIGHTING" || k == "_VERTEXLIGHTING_ON" || k == "_FOG_ON"
+                         || k == "_GLITCHMODE_NONE" || k == "_ZWRITE_ON";
+                if (!keep) m2.DisableKeyword(k);
+            }
+            m2.EnableKeyword("_VERTEXCOLORS_ON");
+            if (m2.HasProperty("_VertexColors")) m2.SetFloat("_VertexColors", 1f);
+            if (m2.HasProperty("_UseAlbedoAsEmissive")) m2.SetFloat("_UseAlbedoAsEmissive", 0f);
+            if (m2.HasProperty("_Color")) m2.SetColor("_Color", Color.white);
+            _modelTemplate = m2;
+            _modelMats.Clear();
+            _log.LogInfo($"world: model material from '{t.name}' ({Signature(t)}); keywords [{string.Join(" ", m2.shaderKeywords)}]");
+        }
+
+        private bool _multiplyDouble;
+        private Shader _multiplyShader;
+
+        private bool _multiplySearched;
+
+        /// <summary>
+        /// Looked up once, among the shaders ULTRAKILL has loaded: Shader.Find only sees shaders
+        /// a build "always includes", and returned null for these every frame (a null-shader
+        /// Material threw each frame, stalling the game for as long as a block was being broken).
+        /// Last resort: plain alpha blending, where the crack's near-transparent background
+        /// vanishes and its grey cracks draw over the block.
+        /// </summary>
+        private void EnsureMultiplyShader()
+        {
+            if (_multiplySearched) return;
+            _multiplySearched = true;
+            Shader Loaded(string name) => Resources.FindObjectsOfTypeAll<Shader>().FirstOrDefault(x => x != null && x.name == name);
+            _multiplyShader = Loaded("ULTRAKILL/Legacy Shaders/Particles/Multiply (Double)");
+            _multiplyDouble = _multiplyShader != null;
+            if (_multiplyShader == null) _multiplyShader = Loaded("Legacy Shaders/Particles/Multiply");
+            if (_multiplyShader == null) _multiplyShader = Loaded("Legacy Shaders/Particles/Alpha Blended") ?? Loaded("Sprites/Default");
+            _log.LogInfo($"world: crack shader {(_multiplyShader != null ? _multiplyShader.name : "MISSING (cracks not drawn)")}");
+        }
+
+        private Material ModelMaterial(int key)
+        {
+            if ((key & Protocol.MODEL_TEX_MULTIPLY) != 0)
+            {
+                // Block-breaking cracks: Minecraft multiplies them into the block (white, nearly
+                // transparent background = no change). Drawn as a multiply decal, unlit.
+                EnsureMultiplyShader();
+                if (_multiplyShader == null) return null;
+                if (_modelMats.TryGetValue(key, out Material cm) && cm != null) return cm;
+                cm = new Material(_multiplyShader) { hideFlags = HideFlags.HideAndDontSave, name = $"UltraCraft.Crack{key & 0xFFFFFF}" };
+                cm.mainTexture = GuiTexture(key & 0xFFFFFF);
+                _modelMats[key] = cm;
+                return cm;
+            }
+            Material template = _modelTemplate != null ? _modelTemplate
+                              : _litCutout != null ? _litCutout : _mats[Cutout] != null ? _mats[Cutout] : _fallback;
+            if (_modelMats.TryGetValue(key, out Material m) && m != null && m.shader == template.shader)
+            {
+                m.mainTexture = GuiTexture(key);
+                return m;
+            }
+            m = new Material(template) { hideFlags = HideFlags.HideAndDontSave, name = $"UltraCraft.Model{key}" };
+            m.mainTexture = GuiTexture(key);
+            _modelMats[key] = m;
+            return m;
         }
 
         private void CreateParticles()
@@ -557,6 +728,7 @@ namespace UltraCraft
                                          || m.shaderKeywords.Any(k => k.Contains("CUTOUT") || k.Contains("ALPHATEST") || k.Contains("CLIP")));
                 Material transparent = Pick(m => m.renderQueue >= 3000 || (F(m, "_SrcBlend") == 5 && F(m, "_DstBlend") == 10));
 
+                BuildModelTemplate(masters);
                 AddMaster(Solid, opaque);
                 AddMaster(Cutout, cutout);
                 AddMaster(Translucent, transparent);

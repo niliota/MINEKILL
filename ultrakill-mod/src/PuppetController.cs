@@ -361,12 +361,46 @@ namespace UltraCraft
                                  $"Minecraft eye is {cam.eyeHeight:F3}. Camera object offset from controller: {camObj}");
                 }
                 t.position = eye;
+                ThirdPerson(cam, t, eye);
             }
             catch (Exception e)
             {
                 _log.LogWarning($"puppet: eye alignment failed: {e.Message}");
             }
         }
+
+        private int _lastCameraType;
+
+        /// <summary>
+        /// F5, as Minecraft does it: behind the eye looking the same way, or in front of it looking
+        /// back (yaw + 180 and pitch mirrored, which is exactly the reversed view direction). The
+        /// distance is Minecraft's own camera distance, already clipped against Minecraft's blocks;
+        /// a sphere cast clips it against ULTRAKILL's level too, with Minecraft's 0.1-block margin.
+        /// The camera object IS CameraController's transform, whose rotation CameraController
+        /// rebuilds from rotationX/rotationY every frame, so turning it here lasts only this frame
+        /// and never feeds back into the yaw/pitch mapping. Minecraft keeps aiming from the eye.
+        /// </summary>
+        private void ThirdPerson(Protocol.SlotCamera cam, Transform t, Vector3 eye)
+        {
+            int type = cam.cameraType <= 2 ? (int)cam.cameraType : 0;
+            if (type != _lastCameraType)
+            {
+                _log.LogInfo($"puppet: Minecraft perspective {(type == 0 ? "first person" : type == 1 ? "third person (behind)" : "third person (front)")}");
+                _lastCameraType = type;
+            }
+            if (type == 0 || cam.cameraDistance <= 0f) return;
+            bool front = type == 2;
+            Vector3 dir = front ? t.forward : -t.forward;
+            float dist = cam.cameraDistance * _scale;
+            if (Physics.SphereCast(eye, 0.1f * _scale, dir, out RaycastHit hit, dist,
+                                   LayerMaskDefaults.Get(LMD.Environment), QueryTriggerInteraction.Ignore))
+                dist = hit.distance;
+            if (front) t.rotation = t.rotation * Quaternion.Euler(0f, 180f, 0f);
+            t.position = eye + dir * dist;
+        }
+
+        /// <summary>Minecraft's camera perspective from the last CAMERA read (0 first person, 1 behind, 2 front).</summary>
+        public int CameraType => _lastCameraType;
 
         /// <summary>
         /// Switch ULTRAKILL's guns off, with its own GunControl.NoWeapon(): hides the current
