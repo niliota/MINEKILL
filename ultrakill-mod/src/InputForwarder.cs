@@ -54,6 +54,10 @@ namespace UltraCraft
             }
         }
 
+        private byte _hotbarSeq;
+        private byte _hotbarSlot;
+        private float _scrollTotal;
+
         private void Sample()
         {
             uint keys = 0;
@@ -109,6 +113,18 @@ namespace UltraCraft
             bool inventoryEdge = inventory && !_lastInventory;
             _lastInventory = inventory;
 
+            // Hotbar keys 1-9 and the mouse wheel (HUD milestone). Free in ULTRAKILL now that
+            // its guns are off. Sent as counters so a sample Minecraft misses loses nothing.
+            for (int i = 0; i < 9; i++)
+            {
+                if (UnityEngine.Input.GetKeyDown(KeyCode.Alpha1 + i))
+                {
+                    _hotbarSeq++;
+                    _hotbarSlot = (byte)i;
+                }
+            }
+            _scrollTotal += UnityEngine.Input.mouseScrollDelta.y;   // +up, as Minecraft's onScroll
+
             byte attack = UnityEngine.Input.GetMouseButton(0) ? (byte)1 : (byte)0;
             byte use = UnityEngine.Input.GetMouseButton(1) ? (byte)1 : (byte)0;
 
@@ -121,6 +137,9 @@ namespace UltraCraft
                 attack = attack,
                 use = use,
                 inventory = inventoryEdge ? (byte)1 : (byte)0,
+                hotbarSeq = _hotbarSeq,
+                hotbarSlot = _hotbarSlot,
+                scrollTotal = _scrollTotal,
             });
 
             // Reported for diagnostics only.

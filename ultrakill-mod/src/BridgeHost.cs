@@ -78,6 +78,7 @@ namespace UltraCraft
         private InputForwarder _input;
         private CollisionPublisher _collision;
         private McWorldView _world;
+        private HudView _hud;
         private int _focusFrames;
         private bool _focusApplied;
         private int _lastX = int.MinValue, _lastY = int.MinValue, _lastZ = int.MinValue;
@@ -194,6 +195,9 @@ namespace UltraCraft
 
             if (_world == null) _world = new McWorldView(_bridge, _puppet, Log);
             _world.Tick();
+
+            if (_hud == null) _hud = new HudView(_bridge, _world);
+            _hud.Tick();
         }
 
         /// <summary>
@@ -203,6 +207,13 @@ namespace UltraCraft
         /// Runs last (see the execution order on this class) so ULTRAKILL's own camera
         /// input has already been applied and is then overwritten.
         /// </summary>
+        /// <summary>Minecraft's HUD, drawn natively over ULTRAKILL's frame.</summary>
+        private void OnGUI()
+        {
+            if (_bridge == null || !_bridge.Connected || _hud == null) return;
+            _hud.OnGUI();
+        }
+
         private void LateUpdate()
         {
             if (_bridge == null || !_bridge.Connected) return;

@@ -66,10 +66,13 @@ namespace UltraCraft
             new Expect("attack",      24),
             new Expect("use",         25),
             new Expect("inventory",   26),
+            new Expect("hotbarSeq",   27),
+            new Expect("hotbarSlot",  28),
+            new Expect("scrollTotal", 29),
             new Expect("seqEnd",      27),
         };
 
-        private const int ExpectedInputSize = 31;
+        private const int ExpectedInputSize = 37;
 
         // Probe values. Deliberately not real input: a key bit pattern that is not
         // reachable from the keyboard, and floats that are not small enough to collapse

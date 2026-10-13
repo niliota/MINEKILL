@@ -36,12 +36,22 @@ final class AtlasExport {
         this.spritesIdentity = sprites;
     }
 
+    /** The atlas this was built from (blocks, items or gui). */
+    private net.minecraft.resources.Identifier atlasId = AtlasIds.BLOCKS;
+
     static AtlasExport build(Minecraft mc) {
-        return new AtlasExport(mc.getAtlasManager().getAtlasOrThrow(AtlasIds.BLOCKS));
+        return build(mc, AtlasIds.BLOCKS);
+    }
+
+    /** Any of Minecraft's atlases: AtlasIds.BLOCKS, ITEMS (item icons) or GUI (HUD sprites). */
+    static AtlasExport build(Minecraft mc, net.minecraft.resources.Identifier id) {
+        AtlasExport e = new AtlasExport(mc.getAtlasManager().getAtlasOrThrow(id));
+        e.atlasId = id;
+        return e;
     }
 
     boolean stale(Minecraft mc) {
-        TextureAtlasAccessor a = (TextureAtlasAccessor) mc.getAtlasManager().getAtlasOrThrow(AtlasIds.BLOCKS);
+        TextureAtlasAccessor a = (TextureAtlasAccessor) mc.getAtlasManager().getAtlasOrThrow(atlasId);
         return a.ultracraft$sprites() != spritesIdentity;
     }
 

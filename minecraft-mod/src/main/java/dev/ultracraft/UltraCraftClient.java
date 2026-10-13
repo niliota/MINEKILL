@@ -33,6 +33,7 @@ public class UltraCraftClient implements ClientModInitializer {
     private dev.ultracraft.bridge.Stream stream;
     private dev.ultracraft.render.WorldMesher mesher;
     private final dev.ultracraft.render.ParticleExport particles = new dev.ultracraft.render.ParticleExport();
+    private final dev.ultracraft.render.HudExport hud = new dev.ultracraft.render.HudExport();
 
     /**
      * Whether Minecraft should behave as if its window were focused.
@@ -176,6 +177,7 @@ public class UltraCraftClient implements ClientModInitializer {
         if (input != null && bridge.connected()) input.apply(mc);
         if (mesher != null && ukAlive) mesher.frame(mc);
         if (ukAlive) particles.frame(mc, bridge);
+        if (ukAlive) hud.frame(mc, bridge);
 
         if (++ticks % 200 == 0) {
             LOG.info("[UltraCraft] tick {}: uk pid {} hb {} flags {} dropped {} | {}",

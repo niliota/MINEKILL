@@ -155,6 +155,8 @@ namespace UltraCraft
                     case Protocol.STREAM_MSG_CLEAR_ALL: ClearAll(); break;
                     case Protocol.STREAM_MSG_ATLAS: LoadAtlas(data, len); break;
                     case Protocol.STREAM_MSG_SECTION: LoadSection(data, len); break;
+                    case Protocol.STREAM_MSG_EXTRA_ATLAS: LoadExtraAtlas(data, len); break;
+                    case Protocol.STREAM_MSG_GUI_SPRITES: LoadGuiSprites(data, len); break;
                     default: _log.LogWarning($"world: unknown stream record type {type} ({len} bytes)"); break;
                 }
             }
@@ -197,6 +199,58 @@ namespace UltraCraft
             _fallback.mainTexture = _atlas;
             foreach (var list in _candidates) foreach (var m in list) SetAtlas(m);
             _log.LogInfo($"world: block atlas {w}x{h} loaded");
+        }
+
+        /// <summary>The block atlas (world, cube icons); also used by the HUD.</summary>
+        public Texture2D BlockAtlas => _atlas;
+        /// <summary>Minecraft's item atlas (flat item icons) and GUI atlas (HUD sprites), for the HUD.</summary>
+        public Texture2D ItemAtlas { get; private set; }
+        public Texture2D GuiAtlas { get; private set; }
+        /// <summary>HUD sprite name ("hud/hotbar") -> UV rect (u0,v0,u1,v1) and pixel size.</summary>
+        public readonly Dictionary<string, (Rect uv, int w, int h)> GuiSprites = new Dictionary<string, (Rect, int, int)>();
+
+        private static Texture2D MakeTexture(byte[] data, int offset, int w, int h, string name)
+        {
+            var tex = new Texture2D(w, h, TextureFormat.RGBA32, false)
+            {
+                filterMode = FilterMode.Point,
+                wrapMode = TextureWrapMode.Clamp,
+                hideFlags = HideFlags.HideAndDontSave,
+                name = name,
+            };
+            var pixels = new byte[w * h * 4];
+            Buffer.BlockCopy(data, offset, pixels, 0, pixels.Length);
+            tex.LoadRawTextureData(pixels);
+            tex.Apply(false, true);
+            return tex;
+        }
+
+        private void LoadExtraAtlas(byte[] data, int len)
+        {
+            int id = BitConverter.ToInt32(data, 0), w = BitConverter.ToInt32(data, 4), h = BitConverter.ToInt32(data, 8);
+            if (w <= 0 || h <= 0 || len < 12 + w * h * 4) { _log.LogError($"world: bad extra atlas {id} {w}x{h}"); return; }
+            Texture2D tex = MakeTexture(data, 12, w, h, id == Protocol.STREAM_ATLAS_ITEMS ? "UltraCraft.ItemAtlas" : "UltraCraft.GuiAtlas");
+            if (id == Protocol.STREAM_ATLAS_ITEMS) { if (ItemAtlas != null) UnityEngine.Object.Destroy(ItemAtlas); ItemAtlas = tex; }
+            else if (id == Protocol.STREAM_ATLAS_GUI) { if (GuiAtlas != null) UnityEngine.Object.Destroy(GuiAtlas); GuiAtlas = tex; }
+            else { UnityEngine.Object.Destroy(tex); return; }
+            _log.LogInfo($"world: {tex.name} {w}x{h} loaded");
+        }
+
+        private void LoadGuiSprites(byte[] data, int len)
+        {
+            GuiSprites.Clear();
+            int n = BitConverter.ToInt32(data, 0), o = 4;
+            for (int i = 0; i < n && o < len; i++)
+            {
+                int nl = BitConverter.ToUInt16(data, o); o += 2;
+                string name = System.Text.Encoding.ASCII.GetString(data, o, nl); o += nl;
+                float u0 = BitConverter.ToSingle(data, o), v0 = BitConverter.ToSingle(data, o + 4);
+                float u1 = BitConverter.ToSingle(data, o + 8), v1 = BitConverter.ToSingle(data, o + 12);
+                int w = BitConverter.ToInt32(data, o + 16), h = BitConverter.ToInt32(data, o + 20);
+                o += 24;
+                GuiSprites[name] = (Rect.MinMaxRect(u0, v0, u1, v1), w, h);
+            }
+            _log.LogInfo($"world: {GuiSprites.Count} HUD sprites: {string.Join(", ", GuiSprites.Keys)}");
         }
 
         private void LoadSection(byte[] data, int len)
