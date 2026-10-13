@@ -48,6 +48,15 @@ namespace UltraCraft
         };
         private const string MasterShader = "ULTRAKILL/Master";
 
+        /// <summary>
+        /// Default material per layer, by name, as chosen by the user in the 2026-10-13 playtest
+        /// (names, not positions: the candidate lists depend on what each level contains).
+        /// Solid: the Master opaque clone (F9 option 1). Cutout: plain Unlit/Texture (F10 option 3).
+        /// Translucent: the Master transparent clone (F11 option 1). Null = first candidate.
+        /// F9/F10/F11 still cycle at runtime, for comparing in new levels.
+        /// </summary>
+        private static readonly string[] PreferredDefault = { null, "Unlit/Texture", null };
+
         private readonly PuppetController _puppet;
         private readonly BepInEx.Logging.ManualLogSource _log;
         private readonly StreamReader _stream;
@@ -314,7 +323,9 @@ namespace UltraCraft
                         SetAtlas(m);
                         _candidates[l].Add(m);
                     }
-                    _choice[l] = 0;
+                    if (l == Cutout) AddVertexLitCutout(opaque, cutout);
+                    int preferred = PreferredDefault[l] == null ? -1 : _candidates[l].FindIndex(m => m.name == PreferredDefault[l]);
+                    _choice[l] = preferred >= 0 ? preferred : 0;
                     ApplyChoice(l);
                     _log.LogInfo($"world: {LayerNames[l]} candidates ({CycleKeys[l]} cycles): " +
                                  string.Join(", ", _candidates[l].Select((m, k) => $"[{k + 1}] {m.name}")));
@@ -352,6 +363,28 @@ namespace UltraCraft
             _candidates[layer].Add(m);
             _log.LogInfo($"world: {LayerNames[layer]} template '{template.name}' ({Signature(template)}); " +
                          $"clone keywords [{string.Join(" ", m.shaderKeywords)}]");
+        }
+
+        /// <summary>
+        /// The solid layer's vertex-lit level material, switched to alpha cutout with the cutout
+        /// template's blend settings (measured: SisyHead3 = queue 2450, _BlendMode 1, ALPHA_TEST),
+        /// so cutout blocks are lit and fogged exactly like solid ones but see-through where the
+        /// texture is. Added last so the user's existing F10 positions do not move.
+        /// </summary>
+        private void AddVertexLitCutout(Material opaque, Material cutout)
+        {
+            if (opaque == null || cutout == null) return;
+            int before = _candidates[Cutout].Count;
+            AddMaster(Cutout, opaque);
+            if (_candidates[Cutout].Count == before) return;
+            Material m = _candidates[Cutout][_candidates[Cutout].Count - 1];
+            m.name = $"{MasterShader} clone of '{opaque.name}' + alpha test";
+            m.renderQueue = cutout.renderQueue;
+            foreach (string prop in new[] { "_BlendMode", "_SrcBlend", "_DstBlend", "_ZWrite" })
+                if (m.HasProperty(prop) && cutout.HasProperty(prop)) m.SetFloat(prop, cutout.GetFloat(prop));
+            foreach (string k in cutout.shaderKeywords)
+                if (k.Contains("ALPHA")) m.EnableKeyword(k);
+            _log.LogInfo($"world: cutout candidate '{m.name}': queue {m.renderQueue}, keywords [{string.Join(" ", m.shaderKeywords)}]");
         }
 
         private static float F(Material m, string prop) => m.HasProperty(prop) ? m.GetFloat(prop) : float.NaN;
