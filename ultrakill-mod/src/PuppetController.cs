@@ -515,6 +515,14 @@ namespace Minekill
                 return;
             }
 
+            // Until Minecraft's player has been lifted to the drop height (AnchorOnFloor), its
+            // position still maps onto the floor: leave ULTRAKILL's player where it is meanwhile.
+            if (!float.IsNaN(_raiseTargetY))
+            {
+                if (Mathf.Abs(p.posY - _raiseTargetY) > 0.05f && Time.unscaledTime < _raiseDeadline) return;
+                _raiseTargetY = float.NaN;
+            }
+
             // Yaw is deliberately NOT passed in. The horizontal mapping is a fixed linear
             // transform of the world offset, cached at the anchor, and has no term that
             // depends on where the player is looking. See McToUk.
@@ -713,36 +721,65 @@ namespace Minekill
         /// held at spawn while this happens, so spawn maps exactly onto that floor. Only the
         /// vertical part changes; with no floor within 3 blocks the capsule measurement stands.
         /// </summary>
-        /// <summary>
-        /// How far below the spawn the floor is looked for. Deliberately short: ULTRAKILL drops its
-        /// player into most levels from above, and that drop must play out. Snapping the feet to
-        /// the floor under it (tried with 64 blocks, 2026-10-14) moved ULTRAKILL's player and broke
-        /// the level start. Minecraft's player falls the drop instead, protected by PlayerSafety's
-        /// grace period.
-        /// </summary>
-        private const float FloorSearchBlocks = 3f;
+        /// <summary>How far below ULTRAKILL's spawn the floor is looked for.</summary>
+        private const float FloorSearchBlocks = 64f;
 
-        private void SnapFeetToFloor()
+        /// <summary>Minecraft y the floor under ULTRAKILL's spawn is pinned to, while a raise is pending.</summary>
+        private float _raiseTargetY = float.NaN;
+        private float _raiseDeadline;
+
+        /// <summary>
+        /// Pin the floor under ULTRAKILL's spawn to Minecraft's spawn height, every time.
+        ///
+        /// ULTRAKILL drops its player into most levels, and the anchor is taken somewhere in that
+        /// drop - a different height on every load or restart (one session: anchors from 102.6 to
+        /// 104.2 units). Mapping Minecraft's spawn onto the player there put the Minecraft world
+        /// higher or lower each time ("the blocks shift"). The floor under the drop is the same
+        /// every time, so the mapping is anchored on it instead: the Minecraft origin is raised by
+        /// the drop height, which makes Minecraft's spawn height land exactly on that floor. Then
+        /// Minecraft's player (held at spawn) is lifted by the same drop, so it still corresponds
+        /// to ULTRAKILL's player, which is never moved (moving it broke ULTRAKILL's level start).
+        /// Both fall together when the player starts moving; PlayerSafety's grace window covers
+        /// the landing. The rendered blocks and collision use the same mapping, so they line up
+        /// with the floor regardless of the capsule's measured feet offset. No floor within
+        /// <see cref="FloorSearchBlocks"/>: the old anchoring (on the player) stands.
+        /// </summary>
+        private void AnchorOnFloor(Protocol.SlotPlayer p)
         {
+            _raiseTargetY = float.NaN;
             try
             {
-                Vector3 from = _rb.position + Vector3.up * (0.5f * _scale);
-                float reach = 0.5f * _scale - _ukFeetOffset.y + FloorSearchBlocks * _scale;
-                if (Physics.Raycast(from, Vector3.down, out RaycastHit hit, reach,
-                                    LayerMaskDefaults.Get(LMD.Environment), QueryTriggerInteraction.Ignore))
+                Vector3 feet = _rb.position + _ukFeetOffset;
+                Vector3 from = feet + Vector3.up * (0.5f * _scale);
+                if (!Physics.Raycast(from, Vector3.down, out RaycastHit hit, (0.5f + FloorSearchBlocks) * _scale,
+                                     LayerMaskDefaults.Get(LMD.Environment), QueryTriggerInteraction.Ignore))
                 {
-                    float was = _ukFeetOffset.y;
-                    _ukFeetOffset.y = hit.point.y - _rb.position.y;
-                    _log.LogInfo($"puppet: feet anchored on the floor under spawn ('{hit.collider.name}'): offset {was:F3} -> {_ukFeetOffset.y:F3} units");
+                    _log.LogInfo($"puppet: no floor within {FloorSearchBlocks} blocks under spawn; anchoring on the player");
+                    return;
                 }
-                else
+                float drop = (feet.y - hit.point.y) / _scale;   // blocks from the feet down to the floor
+                if (drop < 0.01f)
                 {
-                    _log.LogInfo($"puppet: no floor within {FloorSearchBlocks} blocks under spawn; keeping the capsule's feet offset");
+                    _log.LogInfo($"puppet: spawning on the floor ('{hit.collider.name}')");
+                    return;
                 }
+                _mcOrigin.y = p.posY + drop;
+                _raiseTargetY = p.posY + drop;
+                _raiseDeadline = Time.unscaledTime + 2f;
+                _bridge.TryPushEvent(true, new Protocol.RingUkEventsRecord
+                {
+                    kind = (uint)Protocol.EventKind.TELEPORT,
+                    a = BitConverter.ToInt32(BitConverter.GetBytes(p.posX), 0),
+                    c = _raiseTargetY,
+                    d = p.posZ,
+                });
+                _log.LogInfo($"puppet: spawn is {drop:F2} blocks above the floor ('{hit.collider.name}'); floor pinned to " +
+                             $"Minecraft y {p.posY:F2}, raising Minecraft's player to {_raiseTargetY:F2}");
             }
             catch (Exception e)
             {
-                _log.LogWarning($"puppet: floor snap failed: {e.Message}");
+                _log.LogWarning($"puppet: floor anchoring failed: {e.Message}");
+                _raiseTargetY = float.NaN;
             }
         }
 
@@ -895,7 +932,7 @@ namespace Minekill
 
             _mcOrigin = new Vector3(p.posX, p.posY, p.posZ);
             _ukFeetOffset = MeasureFeetOffset();
-            SnapFeetToFloor();
+            AnchorOnFloor(p);
             _generation++;
             // Every anchor samples its own bases (after ApplyLook turns the camera to the new
             // anchor heading). Keeping a previous level's cache was the latent half of the

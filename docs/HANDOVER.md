@@ -46,13 +46,9 @@ ULTRAKILL; no images cross.
 
 ## 4. Open issues and next steps
 
-- **Combat** (the next milestone): Minecraft attacks damaging ULTRAKILL enemies, ULTRAKILL
-  attacks damaging the Minecraft player, death handling. Needs a design discussion first. The
-  `MC_EVENTS` ring and event kinds `ENTITY_ATTACKED` / `PLAYER_HURT` are reserved for it.
+- **Combat balance:** combat is built (proxies, shields, armour, death/restart); Minecraft hits
+  currently kill small ULTRAKILL enemies in one blow (1:1 damage). Tune with the owner.
 - **ULTRAKILL enemies vs Minecraft blocks** (blocks do not stop enemies).
-- **Ground shift on level restart** (back burner): after some restarts the Minecraft world sits
-  lower, and falling through ULTRAKILL floors seems likelier then. Not reproducible on demand.
-  The anchor's feet are now snapped to the floor under spawn, which helped but did not fix it.
 - Missing visuals: sign text, name tags, burning-entity flames, unifont glyphs (rare characters),
   GUI scissoring (long lists), interpolated animation frames.
 - Native Windows: path and file-sharing support is in (`Platform.cs`, `Bridge.defaultPath`), never

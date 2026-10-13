@@ -2539,3 +2539,18 @@ User confirmed: combat works (melee, ranged, potions, taking damage, death and r
   named "an ULTRAKILL enemy" for death messages.
 
 User confirmed: shield blocks ULTRAKILL hits, armour reduces them, death message names an ULTRAKILL enemy; keep the difficulty scaling.
+
+### Ground shift between restarts, fixed without moving ULTRAKILL's player
+
+The owner: ULTRAKILL spawns its player at a varying height on each load/restart, so Minecraft's
+blocks sit higher or lower. Cause (seen in the anchor logs): the anchor is taken mid-drop.
+`AnchorOnFloor` (replacing the reverted floor snap) raycasts up to 64 blocks below the feet; with a
+floor found, the Minecraft origin is raised by the drop height, so Minecraft's spawn height maps
+exactly onto that floor every time, and Minecraft's held player is lifted by the drop (TELEPORT)
+so it still matches ULTRAKILL's player, which is never moved. Until Minecraft reports the lifted
+height (or 2 s pass), the puppet leaves ULTRAKILL's player where it is. The feet offset is the
+capsule measurement again; blocks and collision use the floor-anchored mapping, so the capsule's
+variance no longer moves them either. Both players fall together when movement starts; the grace
+window covers the landing.
+
+User confirmed: blocks stay at the same height across restarts and full level reloads.
