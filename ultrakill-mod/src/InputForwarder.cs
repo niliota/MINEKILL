@@ -86,7 +86,7 @@ namespace Minekill
         }
 
         /// <summary>Outside Minecraft screens, only these go to Minecraft as key events.</summary>
-        private static readonly KeyCode[] GameplayKeys = { KeyCode.T, KeyCode.Slash, KeyCode.E, KeyCode.Q, KeyCode.BackQuote, KeyCode.F5, KeyCode.F3 };
+        private static readonly KeyCode[] GameplayKeys = { KeyCode.T, KeyCode.Slash, KeyCode.E, KeyCode.Q, KeyCode.BackQuote, KeyCode.F5, KeyCode.F3, KeyCode.F };
 
         /// <summary>Keys sent down to Minecraft as F3 combinations, released to it when they come up.</summary>
         private readonly HashSet<KeyCode> _comboDown = new HashSet<KeyCode>();
@@ -220,6 +220,9 @@ namespace Minekill
             if (Held(KeyCode.LeftShift)) keys |= Protocol.KEY_SNEAK;
             // Minecraft sprints on Left Control by default.
             if (Held(KeyCode.LeftControl)) keys |= Protocol.KEY_SPRINT;
+            if (Held(KeyCode.LeftShift) || Held(KeyCode.RightShift)) keys |= Protocol.KEY_MOD_SHIFT;
+            if (Held(KeyCode.LeftControl) || Held(KeyCode.RightControl)) keys |= Protocol.KEY_MOD_CTRL;
+            if (Held(KeyCode.LeftAlt) || Held(KeyCode.RightAlt)) keys |= Protocol.KEY_MOD_ALT;
 
             // Mouse movement as a raw per-frame delta.
             //

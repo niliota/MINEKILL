@@ -2446,3 +2446,18 @@ User confirmed: everything works after the rename.
   Wine the old path is unchanged. Untested on Windows.
 
 User confirmed: still connects on Linux with the Windows-aware path and mapping code.
+
+### F (offhand swap); inventory shortcuts
+
+- **F** joins the gameplay keys forwarded outside screens (swap item to offhand). Inside screens
+  every key already went through (F over a slot swaps it with the offhand there too).
+- **Shift/Ctrl/Alt for clicks:** container screens read the modifiers from the click event
+  (`MouseButtonEvent.hasShiftDown`, verified in AbstractContainerScreen's bytecode), and clicks
+  were forwarded with modifiers 0. INPUT's key mask gained KEY_MOD_SHIFT/CTRL/ALT (bits 8-10,
+  no layout change); InputApplier turns them into SDL modifier bits for every forwarded click
+  (left, right, middle). Shift-click, shift-double-click, ctrl-click and drag-splitting follow.
+- **Polled modifiers:** `Minecraft.hasShiftDown()` and friends poll `InputConstants.isKeyDown`
+  on Minecraft's own window, which never has the keyboard. InputConstantsMixin answers the
+  shift/ctrl/alt scancodes from the forwarded state.
+
+User confirmed: F offhand swap and all inventory shortcuts work.

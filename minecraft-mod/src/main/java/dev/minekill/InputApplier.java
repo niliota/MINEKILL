@@ -27,7 +27,7 @@ import org.slf4j.LoggerFactory;
  * would otherwise steal control from ULTRAKILL. See {@link MouseHandlerMixin} and
  * {@link WindowMixin} for the two halves of that arrangement.
  */
-final class InputApplier {
+public final class InputApplier {
 
     private static final Logger LOG = LoggerFactory.getLogger(MinekillClient.MOD_ID);
 
@@ -76,6 +76,7 @@ final class InputApplier {
         // While a Minecraft screen is open (inventory, chat, pause) keys go to the screen as
         // events (applyEvents), and held movement keys are released, as in vanilla.
         boolean screenOpen = mc.gui.screen() != null;
+        updateMods(in.keys);
         int keys = screenOpen ? 0 : in.keys;
         set(mc.options.keyUp,    (keys & Protocol.KEY_FORWARD) != 0);
         set(mc.options.keyDown,  (keys & Protocol.KEY_BACK) != 0);
@@ -281,9 +282,25 @@ final class InputApplier {
      * Measured with a temporary click probe (since removed): destroyDelay 5 -> 3 -> 1 -> break,
      * and no startAttack calls for forwarded presses.
      */
+    /**
+     * Modifier keys held in ULTRAKILL, as SDL modifier bits (InputConstants.MOD_*): left shift
+     * 0x1, left ctrl 0x40, left alt 0x100. Clicks carry them, so container shortcuts work
+     * (shift-click to move a stack, ...), and InputConstantsMixin answers Minecraft's own
+     * "is shift held" polling from them, since Minecraft's window never sees the keyboard.
+     */
+    private static volatile int heldMods;
+
+    public static int heldMods() { return heldMods; }
+
+    private static void updateMods(int keys) {
+        heldMods = ((keys & Protocol.KEY_MOD_SHIFT) != 0 ? 0x1 : 0)
+                 | ((keys & Protocol.KEY_MOD_CTRL) != 0 ? 0x40 : 0)
+                 | ((keys & Protocol.KEY_MOD_ALT) != 0 ? 0x100 : 0);
+    }
+
     private void forwardButton(Minecraft mc, int button, boolean pressed) {
         try {
-            mc.mouseHandler.onButton(mc.getWindow().handle(), new MouseButtonInfo(button, 0), pressed ? 1 : 0);
+            mc.mouseHandler.onButton(mc.getWindow().handle(), new MouseButtonInfo(button, heldMods), pressed ? 1 : 0);
         } catch (Throwable t) {
             LOG.warn("[MINEKILL] mouse button {} forward failed: {}", button, t.toString());
         }
