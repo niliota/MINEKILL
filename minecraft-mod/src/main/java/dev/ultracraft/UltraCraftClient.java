@@ -71,6 +71,7 @@ public class UltraCraftClient implements ClientModInitializer {
      * connected there is no interaction for a grabbed cursor to serve.
      */
     private static volatile boolean ukLive;
+    private Object lastScreen;
 
     /** True while a live ULTRAKILL is on the bridge (updated every client frame). */
     public static boolean ukLive() {
@@ -182,6 +183,13 @@ public class UltraCraftClient implements ClientModInitializer {
 
         // ULTRAKILL has OS focus, so apply its keyboard and mouse to Minecraft.
         if (input != null && bridge.connected()) input.apply(mc);
+        // DIAGNOSTIC (2026-10-13): every screen open/close, by type.
+        var screenNow = mc.gui.screen();
+        if (screenNow != lastScreen) {
+            LOG.info("[UltraCraft] screen: {} -> {}", lastScreen == null ? "none" : lastScreen.getClass().getSimpleName(),
+                    screenNow == null ? "none" : screenNow.getClass().getSimpleName());
+            lastScreen = screenNow;
+        }
         if (mesher != null && ukAlive) mesher.frame(mc);
         if (ukAlive) particles.frame(mc, bridge);
         if (ukAlive && stream != null && stream.ok()) dev.ultracraft.gui.GuiTextures.flush(stream);

@@ -539,8 +539,11 @@ namespace UltraCraft.Bridge
             }
             int at = ring + Protocol.RINGUKEVENTS_OFF_RECORDS +
                      (int)(head % (uint)cap) * recSize;
+            // The struct is 20 bytes (Pack = 1) inside a 24-byte padded record. Writing recSize
+            // bytes from it used to throw on first use; this ring had never been exercised.
             byte[] bytes = ToBytes(rec);
-            _view.WriteArray(at, bytes, 0, recSize);
+            _view.WriteArray(at, bytes, 0, Math.Min(bytes.Length, recSize));
+            Thread.MemoryBarrier();   // the record is complete before head says it exists
             _view.Write(ring + Protocol.RINGUKEVENTS_OFF_HEAD, head + 1);
             return true;
         }

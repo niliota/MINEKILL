@@ -9,7 +9,7 @@ namespace UltraCraft.Bridge
         public const uint MAGIC = 0x55544C52u;
         public const uint VERSION = 1u;
         public const int HEADER_SIZE = 56;
-        public const int TOTAL_SIZE = 971192;
+        public const int TOTAL_SIZE = 971208;
         public const int SEQ_SIZE = 4;
 
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -35,15 +35,15 @@ namespace UltraCraft.Bridge
         public const int OFFSET_CAMERA = 128;
         public const int SLOTCAMERA_SIZE = 24;
         public const int OFFSET_INPUT = 152;
-        public const int SLOTINPUT_SIZE = 41;
-        public const int OFFSET_CORRECTION = 200;
+        public const int SLOTINPUT_SIZE = 50;
+        public const int OFFSET_CORRECTION = 208;
         public const int SLOTCORRECTION_SIZE = 44;
-        public const int OFFSET_LEVEL = 248;
+        public const int OFFSET_LEVEL = 256;
         public const int SLOTLEVEL_SIZE = 60;
-        public const int OFFSET_SELECTION = 312;
+        public const int OFFSET_SELECTION = 320;
         public const int SLOTSELECTION_SIZE = 36;
-        public const int OFFSET_MC_EVENTS = 348;
-        public const int OFFSET_UK_EVENTS = 6500;
+        public const int OFFSET_MC_EVENTS = 356;
+        public const int OFFSET_UK_EVENTS = 6508;
 
         public const uint FLAG_UK_MOVEMENT = 1u << 0;
         public const uint FLAG_UK_PAUSED = 1u << 1;
@@ -104,6 +104,9 @@ namespace UltraCraft.Bridge
             public float scrollTotal;      // running sum of mouse-wheel steps; Minecraft applies the difference
             public ushort screenWidth;     // ULTRAKILL's screen in pixels: Minecraft lays its GUI out for this size
             public ushort screenHeight;    // 
+            public float cursorX;          // ULTRAKILL's cursor in Minecraft GUI pixels, while a Minecraft screen is open
+            public float cursorY;          // 
+            public byte cursorActive;      // 1 while cursorX/Y drive Minecraft's cursor
             public uint seqEnd;      // must equal seq
         }
 
@@ -174,7 +177,7 @@ namespace UltraCraft.Bridge
             public RingMcEventsRecord[] records;      // 256 entries
         }
 
-        public const int RINGMCEVENTS_OFFSET = 348;
+        public const int RINGMCEVENTS_OFFSET = 356;
         public const int RINGMCEVENTS_CAPACITY = 256;
         public const int RINGMCEVENTS_RECORD_SIZE = 24;
         public const int RINGMCEVENTS_OFF_HEAD = 0;
@@ -199,7 +202,7 @@ namespace UltraCraft.Bridge
             public RingUkEventsRecord[] records;      // 256 entries
         }
 
-        public const int RINGUKEVENTS_OFFSET = 6500;
+        public const int RINGUKEVENTS_OFFSET = 6508;
         public const int RINGUKEVENTS_CAPACITY = 256;
         public const int RINGUKEVENTS_RECORD_SIZE = 24;
         public const int RINGUKEVENTS_OFF_HEAD = 0;
@@ -242,7 +245,7 @@ namespace UltraCraft.Bridge
         public const int STREAM_VTX_OFF_FLAGS = 24;  // u32: bits 0-3 block light, 8-11 sky light, 16 translucent, 17 cutout (neither = solid)
 
         // Tables: one seqlock over a header and a list of fixed-size records.
-        public const int TBL_COLLISION_OFFSET = 12656;  // ULTRAKILL -> Minecraft: ULTRAKILL collision boxes near the player, already in Minecraft block coords
+        public const int TBL_COLLISION_OFFSET = 12664;  // ULTRAKILL -> Minecraft: ULTRAKILL collision boxes near the player, already in Minecraft block coords
         public const int TBL_COLLISION_SIZE = 98328;
         public const int TBL_COLLISION_CAPACITY = 4096;
         public const int TBL_COLLISION_OFF_SEQ = 0;  // seqlock, odd while writing
@@ -257,8 +260,8 @@ namespace UltraCraft.Bridge
         public const int TBL_COLLISION_REC_OFF_MAXX = 12;
         public const int TBL_COLLISION_REC_OFF_MAXY = 16;
         public const int TBL_COLLISION_REC_OFF_MAXZ = 20;
-        public const int TBL_GUI_OFFSET = 110984;  // Minecraft -> ULTRAKILL: every quad Minecraft's GUI draws this frame (HUD, text, items), in draw order, for ULTRAKILL to replay
-        public const int TBL_GUI_SIZE = 786464;
+        public const int TBL_GUI_OFFSET = 110992;  // Minecraft -> ULTRAKILL: every quad Minecraft's GUI draws this frame (HUD, text, items), in draw order, for ULTRAKILL to replay
+        public const int TBL_GUI_SIZE = 786472;
         public const int TBL_GUI_CAPACITY = 32768;
         public const int TBL_GUI_OFF_SEQ = 0;  // seqlock, odd while writing
         public const int TBL_GUI_OFF_TICKTIMESTAMP = 4;  // epoch ms of the frame
@@ -266,7 +269,9 @@ namespace UltraCraft.Bridge
         public const int TBL_GUI_OFF_GUISCALE = 16;  // Minecraft's GUI scale for ULTRAKILL's screen
         public const int TBL_GUI_OFF_GUIWIDTH = 20;  // screen size in GUI pixels
         public const int TBL_GUI_OFF_GUIHEIGHT = 24;
-        public const int TBL_GUI_OFF_RECORDS = 32;
+        public const int TBL_GUI_OFF_SCREENOPEN = 28;  // 1 while a Minecraft screen is open (inventory, chat, pause): mouse and keys go to it
+        public const int TBL_GUI_OFF_PAUSESCREEN = 32;  // 1 while that screen pauses Minecraft's game (ULTRAKILL freezes too)
+        public const int TBL_GUI_OFF_RECORDS = 40;
         public const int TBL_GUI_RECORD_SIZE = 24;
         public const int TBL_GUI_REC_OFF_X = 0;  // GUI pixels, origin top-left
         public const int TBL_GUI_REC_OFF_Y = 4;
@@ -274,7 +279,7 @@ namespace UltraCraft.Bridge
         public const int TBL_GUI_REC_OFF_V = 12;
         public const int TBL_GUI_REC_OFF_RGBA = 16;  // colour, r in the low byte
         public const int TBL_GUI_REC_OFF_TEX = 20;  // GUI_TEX_* key
-        public const int TBL_PARTICLES_OFFSET = 897448;  // Minecraft -> ULTRAKILL: Minecraft's live block particles (TerrainParticle), interpolated, for ULTRAKILL to draw as billboards
+        public const int TBL_PARTICLES_OFFSET = 897464;  // Minecraft -> ULTRAKILL: Minecraft's live block particles (TerrainParticle), interpolated, for ULTRAKILL to draw as billboards
         public const int TBL_PARTICLES_SIZE = 73744;
         public const int TBL_PARTICLES_CAPACITY = 2048;
         public const int TBL_PARTICLES_OFF_SEQ = 0;  // seqlock, odd while writing
@@ -311,6 +316,8 @@ namespace UltraCraft.Bridge
             PLAYER_HURT = 4,
             LEVEL_LOADED = 5,
             PLAYER_RESPAWN = 6,
+            KEY = 7,
+            CHAR = 8,
         }
     }
 }

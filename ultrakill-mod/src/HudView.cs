@@ -31,6 +31,16 @@ namespace UltraCraft
 
         public int LastVertexCount => _count;
 
+        /// <summary>A Minecraft screen is open (inventory, chat, pause): mouse and keys go to Minecraft.</summary>
+        public static bool McScreenOpen { get; private set; }
+        /// <summary>That screen pauses Minecraft's game.</summary>
+        public static bool McPauseScreen { get; private set; }
+        /// <summary>Minecraft's GUI scale for this screen (GUI pixels to screen pixels).</summary>
+        public static float GuiScale { get; private set; } = 1f;
+
+        private bool _wasOpen, _setFrozen, _setTimeScale;
+        private float _savedTimeScale = 1f;
+
         public HudView(BridgeTransport bridge, McWorldView world)
         {
             _bridge = bridge;
@@ -41,7 +51,14 @@ namespace UltraCraft
         public void Tick()
         {
             int n = _bridge.ReadGuiTable(_table);
-            if (n >= 0) _count = n;
+            if (n >= 0)
+            {
+                _count = n;
+                McScreenOpen = BitConverter.ToUInt32(_table, Protocol.TBL_GUI_OFF_SCREENOPEN) != 0;
+                McPauseScreen = BitConverter.ToUInt32(_table, Protocol.TBL_GUI_OFF_PAUSESCREEN) != 0;
+                uint sc = BitConverter.ToUInt32(_table, Protocol.TBL_GUI_OFF_GUISCALE);
+                if (sc > 0) GuiScale = sc;
+            }
             if (Time.frameCount - _scanFrame > 120)
             {
                 _scanFrame = Time.frameCount;
@@ -56,6 +73,40 @@ namespace UltraCraft
             }
             foreach (var ch in _crosshairs)
                 if (ch != null && ch.gameObject.activeSelf) ch.gameObject.SetActive(false);
+        }
+
+        /// <summary>
+        /// LateUpdate, after ULTRAKILL's own code: while a Minecraft screen is open, free and show
+        /// the cursor, hold off ULTRAKILL's pause key (its own OptionsManager.frozen switch, so Esc
+        /// reaches only Minecraft), switch the fists off so clicks in an inventory do not punch, and
+        /// while Minecraft's screen PAUSES its game, freeze ULTRAKILL's time too: otherwise enemies
+        /// keep attacking a player who cannot move. Each change is undone when the screen closes,
+        /// and only if this class made it.
+        /// </summary>
+        public void LateTick()
+        {
+            bool open = McScreenOpen && _count >= 0;
+            if (open)
+            {
+                Cursor.lockState = CursorLockMode.None;
+                Cursor.visible = true;
+                var om = MonoSingleton<OptionsManager>.Instance;
+                if (om != null && !om.frozen) { om.frozen = true; _setFrozen = true; }
+                if (!_wasOpen) { var fc = MonoSingleton<FistControl>.Instance; if (fc != null) fc.NoFist(); }
+                if (McPauseScreen && !_setTimeScale) { _savedTimeScale = Time.timeScale; Time.timeScale = 0f; _setTimeScale = true; }
+                if (!McPauseScreen && _setTimeScale) { Time.timeScale = _savedTimeScale; _setTimeScale = false; }
+            }
+            else if (_wasOpen)
+            {
+                Cursor.lockState = CursorLockMode.Locked;
+                Cursor.visible = false;
+                var om = MonoSingleton<OptionsManager>.Instance;
+                if (om != null && _setFrozen) om.frozen = false;
+                _setFrozen = false;
+                var fc = MonoSingleton<FistControl>.Instance; if (fc != null) fc.YesFist();
+                if (_setTimeScale) { Time.timeScale = _savedTimeScale; _setTimeScale = false; }
+            }
+            _wasOpen = open;
         }
 
         public void OnGUI()
