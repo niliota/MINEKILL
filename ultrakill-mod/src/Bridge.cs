@@ -442,23 +442,28 @@ namespace UltraCraft.Bridge
         }
 
         /// <summary>
-        /// Copy the whole HUD table (header + records) under its seqlock into <paramref name="dst"/>,
-        /// laid out at the generated TBL_HUD_* offsets relative to the table start. False if no clean copy.
+        /// Copy the GUI table's header and its <c>count</c> vertex records under the seqlock into
+        /// <paramref name="dst"/>, at the generated TBL_GUI_* offsets relative to the table start.
+        /// Returns the vertex count, or -1 if no clean copy was possible.
         /// </summary>
-        public bool ReadHudTable(byte[] dst)
+        public int ReadGuiTable(byte[] dst)
         {
-            if (!Connected || dst.Length < Protocol.TBL_HUD_SIZE) return false;
-            int b = Protocol.TBL_HUD_OFFSET;
+            if (!Connected) return -1;
+            int b = Protocol.TBL_GUI_OFFSET;
             for (int attempt = 0; attempt < 3; attempt++)
             {
-                uint s1 = _view.ReadUInt32(b + Protocol.TBL_HUD_OFF_SEQ);
+                uint s1 = _view.ReadUInt32(b + Protocol.TBL_GUI_OFF_SEQ);
                 if ((s1 & 1) != 0) { Thread.SpinWait(16); continue; }
                 Thread.MemoryBarrier();
-                _view.ReadArray(b, dst, 0, Protocol.TBL_HUD_SIZE);
+                int count = (int)_view.ReadUInt32(b + Protocol.TBL_GUI_OFF_COUNT);
+                if (count < 0 || count > Protocol.TBL_GUI_CAPACITY) continue;
+                int bytes = Protocol.TBL_GUI_OFF_RECORDS + count * Protocol.TBL_GUI_RECORD_SIZE;
+                if (dst.Length < bytes) return -1;
+                _view.ReadArray(b, dst, 0, bytes);
                 Thread.MemoryBarrier();
-                if (_view.ReadUInt32(b + Protocol.TBL_HUD_OFF_SEQ) == s1) return true;
+                if (_view.ReadUInt32(b + Protocol.TBL_GUI_OFF_SEQ) == s1) return count;
             }
-            return false;
+            return -1;
         }
 
         public void WriteSlot(int offset, Protocol.SlotInput value)
