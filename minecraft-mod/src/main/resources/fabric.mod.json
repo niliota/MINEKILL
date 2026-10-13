@@ -3,11 +3,14 @@
   "id": "minekill",
   "version": "${version}",
   "name": "MINEKILL",
-  "description": "Minecraft as the simulation and content engine for ULTRAKILL. Minecraft owns the player, inventory, mining and combat; ULTRAKILL owns the world and camera.",
+  "description": "Play Minecraft inside ULTRAKILL: Minecraft simulates the player, blocks, mobs and GUI; ULTRAKILL draws everything natively in its own levels. Requires the MINEKILL BepInEx plugin in ULTRAKILL.",
   "authors": [
-    "MINEKILL"
+    "niliota"
   ],
-  "license": "MIT",
+  "contact": {
+    "sources": "https://github.com/niliota/MINEKILL"
+  },
+  "license": "GPL-3.0-only",
   "environment": "client",
   "entrypoints": {
     "client": [

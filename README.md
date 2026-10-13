@@ -1,211 +1,233 @@
 # MINEKILL
 
-Minecraft as the simulation and content engine for ULTRAKILL. You keep your Minecraft
-inventory, your Minecraft movement and your Minecraft mining; ULTRAKILL provides the world,
-the camera and its own enemies.
+**Play Minecraft inside ULTRAKILL.**
 
-**Status: Stage 1 (the puppet) works. Minecraft's movement and mouse look drive ULTRAKILL's
-player and camera.** Collision, inventory, mining and combat are not built yet. See *Where it
-is* below for exactly what works.
+MINEKILL runs both games at once and merges them. ULTRAKILL is the window you play in: its levels,
+its camera, its lighting and its enemies. Minecraft runs behind it as the simulation engine: your
+player, movement, inventory, mining, building, mobs, items and saves are all real Minecraft.
+Everything Minecraft shows is redrawn natively inside ULTRAKILL. No images are copied between the
+two games.
+
+> MINEKILL is an unofficial fan project. It is not affiliated with or endorsed by New Blood
+> Interactive, Hakita, Mojang or Microsoft. You need your own legitimate copies of both games.
+> The repository contains no game files or assets; everything is read from your installs at
+> runtime.
+
+---
+
+## What works
+
+- **Minecraft's player in ULTRAKILL's levels.** Pure Minecraft movement (walking, sprinting,
+  sneaking, jumping, swimming, flying in creative). ULTRAKILL's camera follows Minecraft's eye.
+  ULTRAKILL's own movement, guns and HUD are switched off.
+- **ULTRAKILL's level is solid to Minecraft.** Walls, floors, ramps and doors collide with the
+  player, with mobs, dropped items and minecarts. Mobs path-find across ULTRAKILL floors.
+  Arrows, tridents and thrown items hit and stick. Water and lava pool on and flow off
+  ULTRAKILL geometry.
+- **Building and mining.** Place Minecraft blocks anywhere, including onto ULTRAKILL surfaces,
+  and mine them, with break cracks, particles and the block outline. Buckets work on ULTRAKILL
+  surfaces too.
+- **Minecraft's world, drawn by ULTRAKILL.** Blocks (lit by ULTRAKILL's lights), fluids,
+  animated textures, particles, mobs, players, dropped items, arrows, chests, beds, signs,
+  banners and other block entities.
+- **Minecraft's whole interface.** HUD, hotbar, health and hunger, chat, commands, inventories,
+  containers, the creative menu, the pause menu and the F3 debug screen, all usable with
+  ULTRAKILL's mouse and keyboard.
+- **First-person hand and held items, F5 third person** with your own skin, and the player
+  model in the inventory.
+
+Not done yet: combat between Minecraft and ULTRAKILL enemies (they currently ignore each other),
+sign text, name tags, flames on burning mobs, and hiding the Minecraft window.
 
 ---
 
 ## How it works
 
-Two real games run at the same time and talk through one memory-mapped file.
-
 ```
-  Minecraft (native Linux)                  ULTRAKILL (Wine)
-  Fabric mod                                BepInEx 5 plugin
-        |                                          |
-        |   minekill.bridge  (memory-mapped file, both processes map it)
-        +------------------------------------------+
+   ULTRAKILL  (BepInEx 5 plugin, C#)          Minecraft 26.3  (Fabric mod, Java)
+   ─────────────────────────────────          ──────────────────────────────────
+   draws the world, camera, HUD     ◄──────   player, physics, inventory, blocks,
+   publishes its level collision    ──────►   mobs, items, GUI; simulates everything
+   forwards keyboard and mouse      ──────►   applies them as if typed into Minecraft
+
+                  minekill.bridge   memory-mapped file, fixed layout (state, events, tables)
+                  minekill.stream   memory-mapped ring (block meshes, textures)
 ```
 
-A **mapped file** is used rather than a Windows named shared-memory object, because the two
-processes are on opposite sides of the Wine boundary. A `Local\` object would be invisible
-across that boundary; a mapped file is visible to both. This was verified empirically in both
-directions before any of the bridge code was written, and re-verified against the real game.
+Each frame Minecraft publishes its player, camera, GUI, hand, world models and particles, and
+streams changed block sections and textures. ULTRAKILL publishes its keyboard and mouse input and
+the collision geometry around the player and other entities. Minecraft applies those boxes inside
+its own physics, pathfinding, fluid and projectile code, so its own rules handle them like blocks.
 
-Ownership is fixed in [`docs/CONTRACT.md`](docs/CONTRACT.md). Short version: **Minecraft owns
-the player, inventory, mining, block placing, combat and saves. ULTRAKILL owns the world, the
-camera and all of its own systems, which stay unmodified.** No images ever cross the bridge.
+The design and the full ownership rules are in [`docs/CONTRACT.md`](docs/CONTRACT.md). The wire
+layout is generated from a single schema and checked byte for byte on both sides:
+[`bridge/protocol/PROTOCOL.md`](bridge/protocol/PROTOCOL.md).
 
 ---
 
-## Where it is
+## Requirements
 
-Done and verified (playtested 2026-10-09):
+| | |
+|---|---|
+| ULTRAKILL | Steam release, Unity 2022.3 Mono build (x86-64) |
+| ULTRAKILL mod loader | [BepInEx 5.4.23.2](https://github.com/BepInEx/BepInEx/releases) **win_x64** |
+| Minecraft | Java Edition **26.3** |
+| Minecraft mod loader | [Fabric Loader](https://fabricmc.net/) **0.19.5** or newer (no Fabric API needed) |
+| Java | 25 (what Minecraft 26.3 ships with) |
 
-- BepInEx 5.4.23.2 (x64 Mono) loads in ULTRAKILL under Wine 11.17. No `WINEDLLOVERRIDES` needed.
-- The Fabric mod for Minecraft 26.3 builds and loads.
-- Both sides open the shared file, agree on protocol version 1, and see each other's process id
-  and heartbeat. No configuration required; both default to `/var/tmp/minekill.bridge`.
-- **Minecraft drives ULTRAKILL's player.** WASD moves the ULTRAKILL puppet correctly at every
-  heading, mouse look turns both cameras together, and turning the camera does not move the
-  player.
-- ULTRAKILL keeps the OS cursor; neither game pauses when unfocused.
-- The wire layout is generated once and checked to be byte-identical across C# and Java.
+### Platforms
 
-Not built yet: collision (ULTRAKILL geometry is not solid to the Minecraft player), placing
-blocks onto ULTRAKILL geometry, the GUI/hand layers, combat, and the optional ULTRAKILL dash/slide
-toggle (the puppet currently disables ULTRAKILL's movement entirely, so dash and slide are not
-available at all yet).
+| Setup | Status |
+|---|---|
+| **Linux**: Minecraft native, ULTRAKILL under Wine | **Tested.** This is the development setup (Wine 11.17). |
+| **Windows**: both games native | **Supported in code, not yet tested.** Reports welcome. |
+
+The two setups differ only in where the shared files live (see *Configuration*) and how
+ULTRAKILL's side opens them. Everything else is the same code.
 
 ---
 
 ## Install
 
-You need both games installed, and the project must already be set up as described in
-[`docs/SETUP.md`](docs/SETUP.md).
+1. **BepInEx in ULTRAKILL.** Extract BepInEx 5.4.23.2 **win_x64** into the ULTRAKILL folder
+   (next to `ULTRAKILL.exe`), and start ULTRAKILL once so BepInEx creates its folders. Under
+   Wine no DLL override is needed.
+2. **The ULTRAKILL plugin.** Copy `Minekill.ULTRAKILL.dll` into `ULTRAKILL/BepInEx/plugins/`.
+3. **Fabric in Minecraft.** Create a Minecraft 26.3 instance with Fabric Loader 0.19.5 or newer
+   (any launcher with Fabric support works).
+4. **The Minecraft mod.** Copy `minekill-minecraft-0.1.0.jar` into the instance's `mods/` folder.
+5. **A world.** Create a single-player world. A **Superflat world with the Void preset** is
+   recommended: MINEKILL puts your Minecraft player in ULTRAKILL's level at a fixed spot
+   (x 1000, y 128, z 1000), and Minecraft terrain there would stand in the way.
 
-**ULTRAKILL side**
+There are no prebuilt releases yet; build the two files as described in *Building*.
 
-1. Copy `ultrakill-mod/bin/Release/Minekill.ULTRAKILL.dll` into
-   `ULTRAKILL/BepInEx/plugins/`.
-2. BepInEx itself lives in `ULTRAKILL/` (`winhttp.dll`, `doorstop_config.ini`,
-   `.doorstop_version`, `BepInEx/`). If it is not there yet, extract BepInEx 5.4.23.2
-   **win_x64** into the ULTRAKILL folder.
-3. Nothing to configure: both sides find the bridge file on their own (see below).
+## Playing
 
-**Minecraft side**
+1. Start Minecraft and load your world.
+2. Start ULTRAKILL and load a level. The two connect on their own. When the level starts,
+   Minecraft's player is moved to the spawn spot and held there until you press a movement key.
+3. Play in the ULTRAKILL window. Leave Minecraft running behind it, but **do not minimise it**:
+   a minimised Minecraft drops to a few frames per second and ULTRAKILL stutters with it.
 
-1. Copy `minecraft-mod/build/libs/minekill-minecraft-0.1.0.jar` into the instance's
-   `minecraft/mods/` folder.
-2. Nothing to configure (see *Setting `MINEKILL_BRIDGE`* below).
+### Controls
 
-### Both games must keep running when unfocused
+Minecraft's movement keys are read in ULTRAKILL: **WASD**, **Space**, **Left Shift** (sneak),
+**Left Ctrl** (sprint), the mouse, **left/right/middle click**, the **scroll wheel** and **1-9**.
 
-Only one window can be focused, and the other game will be in the background for the whole
-session, so **neither game is allowed to pause when it loses focus**:
+| Key | Does (in Minecraft) |
+|---|---|
+| E | Inventory |
+| T, / | Chat, command line |
+| Q | Drop item |
+| ` (backtick) | Minecraft's pause menu (Esc stays ULTRAKILL's own) |
+| F3 | Debug screen; hold F3 for the F3 + key combinations |
+| F5 | Change perspective |
 
-- **Minecraft** — set **Pause On Lost Focus** to off (Options → Video). This is a vanilla
-  option; the installer sets `pauseOnLostFocus:false` in `options.txt` for you, and you can
-  change it back at any time.
-- **ULTRAKILL** — handled by the plugin. ULTRAKILL pauses through Unity's own
-  `Application.runInBackground`, which defaults to off. Note this must be set from a loop
-  that runs *after* Unity applies its Player Settings; setting it once during startup is
-  silently undone.
-
-**Do not minimise Minecraft; just leave it behind ULTRAKILL.** Minecraft caps itself at
-10 FPS while minimised, and the bridge updates once per Minecraft frame, so a minimised
-Minecraft makes the ULTRAKILL player stutter. To save GPU on an integrated chip, lower
-Minecraft's render distance or Max Framerate (60 is plenty) instead. The mod already stops
-Minecraft's "Reduce FPS when AFK" throttle from kicking in while ULTRAKILL is connected.
-
-### Which game do you look at?
-
-**ULTRAKILL.** It is the host: it owns the world, the camera and the window you play in.
-Minecraft is the simulation engine behind it. This mirrors
-[SkyCraft](https://github.com/chasmlol/SkyCraft), where "Minecraft runs hidden in the
-background, and Skyrim draws everything" — SkyCraft gives Minecraft no window at all, which is
-where this project is heading.
-
-### Setting `MINEKILL_BRIDGE`
-
-**Normally you don't need to.** Both sides default to `/var/tmp/minekill.bridge`, so they find
-each other with no configuration:
-
-- Minecraft resolves `/var/tmp/minekill.bridge`
-- ULTRAKILL resolves the same file as `Z:\var\tmp\minekill.bridge`
-
-`/var/tmp` is used because `Z:` is the one anchor Wine always provides — it is the filesystem
-root — so the path needs no username, no home directory and no assumptions about how the Wine
-prefix was built. Paths derived from the home directory were tried first and abandoned: inside
-Wine the home cannot be located reliably, and different prefixes produced three different wrong
-answers.
-
-`MINEKILL_BRIDGE` is only an override for unusual setups. If you do set it, it must be the
-same file on both sides — the Linux path for Minecraft, and the `Z:` form for ULTRAKILL, because
-Wine maps `Z:` to `/`.
-
-A relative path must never be used here. Each process resolves it against its own working
-directory, so the two would silently open different files and never meet.
-
-To confirm what each side resolved, read `/var/tmp/ultrakill-status.txt` while both games are
-running. It is the dependable source, because BepInEx's log stops flushing under Wine.
+While a Minecraft screen is open, every key, typed characters and the mouse go to that screen.
+F9, F10 and F11 are development keys that cycle the materials used for solid, cut-out and
+translucent blocks.
 
 ---
 
-## Uninstall
+## Configuration
 
-**ULTRAKILL**
+Normally nothing. Both sides pick the same files on their own:
 
-1. Delete `ULTRAKILL/BepInEx/plugins/Minekill.ULTRAKILL.dll`.
-2. To remove BepInEx entirely: delete `ULTRAKILL/winhttp.dll`,
-   `ULTRAKILL/doorstop_config.ini`, `ULTRAKILL/.doorstop_version` and `ULTRAKILL/BepInEx/`.
-   Nothing else in the game folder is modified, so those four are a complete rollback.
+| Platform | Minecraft | ULTRAKILL |
+|---|---|---|
+| Linux + Wine | `/var/tmp/minekill.bridge` | `Z:\var\tmp\minekill.bridge` (Wine's `Z:` is `/`) |
+| Windows | `%LOCALAPPDATA%\MINEKILL\minekill.bridge` | the same |
 
-**Minecraft**
+`minekill.stream` sits next to the bridge file, and ULTRAKILL writes a live status file,
+`ultrakill-status.txt`, there too.
 
-1. Delete `minecraft/mods/minekill-minecraft-0.1.0.jar`.
-2. Delete the `minekill.bridge` file if you want a clean slate.
+To use a different location, set the environment variable **`MINEKILL_BRIDGE`** to an absolute
+path for **both** games, naming the same file (under Wine, the `Z:` form for ULTRAKILL). Never use
+a relative path: each game would resolve it against its own working folder and they would never
+meet.
+
+Minecraft settings worth changing: lower the render distance and set Max Framerate to 60 to
+leave GPU time for ULTRAKILL. MINEKILL already keeps both games running while unfocused.
 
 ---
 
-## Rebuilding
+## Building
+
+You need: Python 3, the .NET SDK (any version that builds `net472`), Java 25 and Gradle.
 
 ```bash
-# protocol (regenerates Protocol.cs, Protocol.java and PROTOCOL.md)
+# 1. Wire protocol: regenerates Protocol.cs, Protocol.java and PROTOCOL.md from the schema
 python3 bridge/protocol/generate.py
 
-# verify C# and Java agree byte for byte — run this on every change
+# 2. Check that C# and Java agree on every offset (must print LAYOUT CHECK PASSED)
 bridge/protocol/check-layout.sh
 
-# ULTRAKILL side
+# 3. ULTRAKILL plugin  ->  ultrakill-mod/bin/Release/Minekill.ULTRAKILL.dll
 cd ultrakill-mod && dotnet build -c Release
+#    It compiles against ULTRAKILL's and BepInEx's own DLLs, read from your install
+#    (default ../ULTRAKILL). Elsewhere:  dotnet build -c Release -p:GameDir=/path/to/ULTRAKILL
 
-# Minecraft side
+# 4. Minecraft mod  ->  minecraft-mod/build/libs/minekill-minecraft-0.1.0.jar
 cd minecraft-mod && gradle build
 ```
 
-`check-layout.sh` is not optional politeness. Both sides read the same bytes at the same
-offsets; if the two layouts ever drift, the failure shows up as random stutter or damage that
-does nothing, with no error anywhere. The check turns that into a build failure.
+Nothing from either game is redistributed by the build: the ULTRAKILL assemblies are only
+compile-time references, and Minecraft is fetched by Fabric Loom from Mojang as usual.
 
 ---
 
-## Known issues
+## Troubleshooting
 
-- **Vanilla ULTRAKILL does not tick while its window is unfocused.** The plugin fixes this by
-  setting `Application.runInBackground` (it settles around frame 120). Without the plugin, or
-  in the first ~2 seconds, an unfocused ULTRAKILL looks frozen — so never diagnose an
-  ULTRAKILL stall without first checking whether the plugin had loaded.
-- **BepInEx's log stops flushing under Wine.** Read `/var/tmp/ultrakill-status.txt` for
-  live bridge state instead.
-- **ULTRAKILL geometry is not solid yet.** The player collides only with Minecraft's own
-  world. Collision injection is the next major milestone.
-- **The process id ULTRAKILL reports is a Wine process id**, not a Linux one, because
-  ULTRAKILL only knows about its own Windows process space. It is non-zero and unique enough
-  for liveness checks, but it will not match what `ps` shows on Linux.
-- **Minecraft 26.3 ships unobfuscated**, and it renamed things: `MinecraftClient` is now
-  `net.minecraft.client.Minecraft` and `tick()` is `runTick(boolean)`. Fabric publishes an
-  empty intermediary mapping set for it, which is why the build has a `mappings` line that
-  looks redundant. See the comments in `minecraft-mod/build.gradle`.
-- No `WINEDLLOVERRIDES` have been needed so far. BepInEx 5 Mono injects via `winhttp.dll`,
-  which Wine implements itself.
+- **Nothing happens in ULTRAKILL.** Check `BepInEx/LogOutput.log` for `[MINEKILL]` lines. If
+  BepInEx reports `0 plugins to load`, the plugin DLL is missing or BepInEx is the x86 build.
+- **The games do not connect.** Minecraft's log (`logs/latest.log`) prints the bridge path it
+  opened and `HANDSHAKE OK` once ULTRAKILL is seen. Both games must name the same file; see
+  *Configuration*. ULTRAKILL's live state is in `ultrakill-status.txt`, which is more reliable
+  than BepInEx's log under Wine.
+- **Stutter.** Make sure Minecraft is not minimised, and lower its render distance.
+- **The Minecraft world sits a little higher or lower after a level restart.** Known, being
+  investigated. Restarting the level again usually fixes it.
+- **Startup crash in Minecraft after updating.** MINEKILL targets Minecraft 26.3 exactly; its
+  hooks name 26.3's own classes and methods.
+
+## Uninstall
+
+- ULTRAKILL: delete `BepInEx/plugins/Minekill.ULTRAKILL.dll`. To remove BepInEx too, delete
+  `winhttp.dll`, `doorstop_config.ini`, `.doorstop_version` and `BepInEx/`; nothing else in the
+  game folder is touched.
+- Minecraft: delete the jar from `mods/`.
+- The shared files (`minekill.bridge`, `minekill.stream`, `ultrakill-status.txt`) can be deleted
+  whenever both games are closed.
 
 ---
 
-## Layout
+## Repository layout
 
 ```
-bridge/protocol/        one schema, generated for both languages
-  generate.py           the source of truth for the wire layout
-  check-layout.sh       proves the C# and Java layouts match
-  PROTOCOL.md           generated protocol documentation
-  layout-check-cs/      dumps the real C# struct offsets
-  layout-check-java/    dumps the Java offsets
-ultrakill-mod/          BepInEx plugin (C#, net472)
-minecraft-mod/          Fabric mod (Java 25)
+bridge/protocol/   the wire schema (generate.py), its layout check, generated PROTOCOL.md
+ultrakill-mod/     BepInEx 5 plugin (C#, net472)
+minecraft-mod/     Fabric mod for Minecraft 26.3 (Java 25)
 docs/
-  CONTRACT.md           who owns what, units, lifecycle. Read this first.
-  MODLOG.md             what was done, what was verified, what went wrong
-  SETUP.md              how this machine is set up
+  CONTRACT.md      who owns what, units, channels, lifecycle
+  HANDOVER.md      the current state and how the code is organised, for contributors
+  SETUP.md         the development machine
+  LEGAL.md         what this project does and does not contain, and why
+  MODLOG.md        the development log, round by round
 ```
 
-## Licence
+## Credits
 
-This project's own code is MIT. It contains no ULTRAKILL or Minecraft assets, and it must
-never contain any: both games' assets are read from the player's own installs at runtime.
-See [`docs/LEGAL.md`](docs/LEGAL.md) before publishing anything.
+- [SkyCraft](https://github.com/chasmlol/SkyCraft) (MIT) by chasmlol, the Skyrim + Minecraft
+  project whose architecture this one follows: Minecraft as a hidden simulation engine, its
+  world re-meshed and redrawn by the host, the host's collision injected into Minecraft. Ideas
+  only; no SkyCraft code is included.
+- [BepInEx](https://github.com/BepInEx/BepInEx) and [Fabric](https://fabricmc.net/), which make
+  both mods possible.
+- Built with heavy use of AI tooling (Anthropic's Claude), directed and playtested by the author.
+
+## License
+
+MINEKILL's own code is licensed under the **GNU General Public License v3.0**; see
+[`LICENSE`](LICENSE). ULTRAKILL and Minecraft are the property of their respective owners and are
+not covered by this license.
