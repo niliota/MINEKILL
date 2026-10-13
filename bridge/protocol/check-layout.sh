@@ -55,7 +55,7 @@ grep -E '^FIELD' "$TMP/java.txt" | grep MISSING_CONSTANT && {
 # Compare field offsets for the four slot structs. The C# dump also contains the
 # header's fields, which have no Java offset constants (both sides use the fixed
 # header layout), so only the slots are comparable field by field.
-for s in SlotPlayer SlotCamera SlotInput SlotLevel; do
+for s in SlotPlayer SlotCamera SlotInput SlotLevel SlotSelection; do
   # Keep name AND offset. C# prints "<name>:<offset>:<size>", Java prints
   # "<name>:<offset>:?"; keeping the first two colon-separated parts gives a
   # comparable "<Struct>.<name>:<offset>" from both. seq/seqEnd are real C#

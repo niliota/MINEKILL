@@ -192,7 +192,7 @@ namespace UltraCraft
             if (_collision == null) _collision = new CollisionPublisher(_bridge, _puppet, Log);
             _collision.Tick();
 
-            if (_world == null) _world = new McWorldView(_bridge.Path, _puppet, Log);
+            if (_world == null) _world = new McWorldView(_bridge, _puppet, Log);
             _world.Tick();
         }
 

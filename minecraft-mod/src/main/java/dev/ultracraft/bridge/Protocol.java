@@ -6,7 +6,7 @@ public final class Protocol {
     public static final int MAGIC = 0x55544C52;
     public static final int VERSION = 1;
     public static final int HEADER_SIZE = 56;
-    public static final int TOTAL_SIZE = 110928;
+    public static final int TOTAL_SIZE = 110968;
     public static final int SEQ_SIZE = 4;
 
     public static final int FLAG_UK_MOVEMENT = 1;
@@ -18,22 +18,24 @@ public final class Protocol {
     public static final int OFFSET_PLAYER = 56;
     public static final int SLOTPLAYER_SIZE = 71;
     public static final int OFFSET_CAMERA = 128;
-    public static final int SLOTCAMERA_SIZE = 20;
+    public static final int SLOTCAMERA_SIZE = 24;
     public static final int OFFSET_INPUT = 152;
     public static final int SLOTINPUT_SIZE = 31;
     public static final int OFFSET_CORRECTION = 184;
     public static final int SLOTCORRECTION_SIZE = 44;
     public static final int OFFSET_LEVEL = 232;
     public static final int SLOTLEVEL_SIZE = 60;
-    public static final int OFFSET_MC_EVENTS = 292;
-    public static final int RINGMCEVENTS_OFFSET = 292;
+    public static final int OFFSET_SELECTION = 296;
+    public static final int SLOTSELECTION_SIZE = 36;
+    public static final int OFFSET_MC_EVENTS = 332;
+    public static final int RINGMCEVENTS_OFFSET = 332;
     public static final int RINGMCEVENTS_CAPACITY = 256;
     public static final int RINGMCEVENTS_RECORD_SIZE = 24;
     public static final int RINGMCEVENTS_OFF_HEAD = 0;
     public static final int RINGMCEVENTS_OFF_TAIL = 4;
     public static final int RINGMCEVENTS_OFF_RECORDS = 8;
-    public static final int OFFSET_UK_EVENTS = 6444;
-    public static final int RINGUKEVENTS_OFFSET = 6444;
+    public static final int OFFSET_UK_EVENTS = 6484;
+    public static final int RINGUKEVENTS_OFFSET = 6484;
     public static final int RINGUKEVENTS_CAPACITY = 256;
     public static final int RINGUKEVENTS_RECORD_SIZE = 24;
     public static final int RINGUKEVENTS_OFF_HEAD = 0;
@@ -92,12 +94,14 @@ public final class Protocol {
         public static final int OFF_YAW = 4;     // Minecraft degrees
         public static final int OFF_PITCH = 8;   // Minecraft degrees
         public static final int OFF_FOV = 12;     // Minecraft FOV, for the debug overlay only
-        public static final int OFF_SEQ_END = 16;
-        public static final int SIZE = 20;
+        public static final int OFF_EYEHEIGHT = 16; // blocks from the feet to the eye, current pose (1.62 standing, lower sneaking)
+        public static final int OFF_SEQ_END = 20;
+        public static final int SIZE = 24;
 
         public float yaw;
         public float pitch;
         public float fov;
+        public float eyeHeight;
     }
 
     public static final class SlotInput {
@@ -177,6 +181,27 @@ public final class Protocol {
         public float boundsMaxZ;
     }
 
+    public static final class SlotSelection {
+        public static final int OFF_SEQ = 0;
+        public static final int OFF_KIND = 4;    // 0 nothing, 1 a Minecraft block (its outline), 2 where a held block would go on ULTRAKILL geometry
+        public static final int OFF_MINX = 8;    // Minecraft block coords
+        public static final int OFF_MINY = 12;    // 
+        public static final int OFF_MINZ = 16;    // 
+        public static final int OFF_MAXX = 20;    // 
+        public static final int OFF_MAXY = 24;    // 
+        public static final int OFF_MAXZ = 28;    // 
+        public static final int OFF_SEQ_END = 32;
+        public static final int SIZE = 36;
+
+        public int kind;
+        public float minX;
+        public float minY;
+        public float minZ;
+        public float maxX;
+        public float maxY;
+        public float maxZ;
+    }
+
     public static final class RingMcEvents {
         public static final int OFF_HEAD = 0;
         public static final int OFF_TAIL = 4;
@@ -251,7 +276,7 @@ public final class Protocol {
     public static final int STREAM_VTX_OFF_FLAGS = 24;  // u32: bits 0-3 block light, 8-11 sky light, 16 translucent, 17 cutout (neither = solid)
 
     // Tables: one seqlock over a header and a list of fixed-size records.
-    public static final int TBL_COLLISION_OFFSET = 12600;  // ULTRAKILL -> Minecraft: ULTRAKILL collision boxes near the player, already in Minecraft block coords
+    public static final int TBL_COLLISION_OFFSET = 12640;  // ULTRAKILL -> Minecraft: ULTRAKILL collision boxes near the player, already in Minecraft block coords
     public static final int TBL_COLLISION_SIZE = 98328;
     public static final int TBL_COLLISION_CAPACITY = 4096;
     public static final int TBL_COLLISION_OFF_SEQ = 0;  // seqlock, odd while writing

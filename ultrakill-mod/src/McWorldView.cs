@@ -57,6 +57,7 @@ namespace UltraCraft
         /// </summary>
         private static readonly string[] PreferredDefault = { null, "Unlit/Texture", null };
 
+        private readonly BridgeTransport _bridge;
         private readonly PuppetController _puppet;
         private readonly BepInEx.Logging.ManualLogSource _log;
         private readonly StreamReader _stream;
@@ -71,16 +72,22 @@ namespace UltraCraft
         private readonly Dictionary<long, GameObject> _sections = new Dictionary<long, GameObject>();
         private int _sectionsReceived;
 
+        // Minecraft's block outline (SELECTION slot), drawn as lines under the root.
+        private GameObject _outline;
+        private Mesh _outlineMesh;
+        private Protocol.SlotSelection _lastSelection;
+
         public int Sections => _sections.Count;
         public string AtlasSize => _atlas != null ? $"{_atlas.width}x{_atlas.height}" : "none";
         public string ShaderName => string.Join(" / ", _mats.Select(m => m != null ? m.name : "none"));
         public StreamReader Stream => _stream;
 
-        public McWorldView(string bridgePath, PuppetController puppet, BepInEx.Logging.ManualLogSource log)
+        public McWorldView(BridgeTransport bridge, PuppetController puppet, BepInEx.Logging.ManualLogSource log)
         {
+            _bridge = bridge;
             _puppet = puppet;
             _log = log;
-            _stream = new StreamReader(bridgePath);
+            _stream = new StreamReader(bridge.Path);
             if (_stream.Open())
                 _log.LogInfo($"world: stream open at {_stream.Path}, resync requested ({_stream.ResyncRequested})");
             else
@@ -105,6 +112,7 @@ namespace UltraCraft
                 t.localScale = s;
                 if (!_root.activeSelf) _root.SetActive(true);
                 if (!_candidatesBuilt && _atlas != null) BuildCandidates();
+                UpdateOutline();
             }
             else if (_root.activeSelf)
             {
@@ -249,6 +257,52 @@ namespace UltraCraft
             var mf = go.GetComponent<MeshFilter>();
             if (mf != null && mf.sharedMesh != null) UnityEngine.Object.Destroy(mf.sharedMesh);
             UnityEngine.Object.Destroy(go);
+        }
+
+        /// <summary>
+        /// Minecraft's targeted-block outline: a Minecraft block's outline, or (Milestone E) the
+        /// cell a held block would go into on ULTRAKILL geometry. Lines in Minecraft coordinates
+        /// under the root, so they sit exactly on the blocks drawn here.
+        /// </summary>
+        private void UpdateOutline()
+        {
+            if (!_bridge.TryReadSlot(Protocol.OFFSET_SELECTION, Protocol.SLOTSELECTION_SIZE, out Protocol.SlotSelection sel)) return;
+            if (_outline == null) CreateOutline();
+            bool show = sel.kind != 0;
+            if (_outline.activeSelf != show) _outline.SetActive(show);
+            if (!show) { _lastSelection = sel; return; }
+            if (sel.kind == _lastSelection.kind && sel.minX == _lastSelection.minX && sel.minY == _lastSelection.minY
+                && sel.minZ == _lastSelection.minZ && sel.maxX == _lastSelection.maxX && sel.maxY == _lastSelection.maxY
+                && sel.maxZ == _lastSelection.maxZ) return;
+            _lastSelection = sel;
+
+            float x0 = sel.minX, y0 = sel.minY, z0 = sel.minZ, x1 = sel.maxX, y1 = sel.maxY, z1 = sel.maxZ;
+            _outlineMesh.vertices = new[]
+            {
+                new Vector3(x0, y0, z0), new Vector3(x1, y0, z0), new Vector3(x1, y0, z1), new Vector3(x0, y0, z1),
+                new Vector3(x0, y1, z0), new Vector3(x1, y1, z0), new Vector3(x1, y1, z1), new Vector3(x0, y1, z1),
+            };
+            _outlineMesh.RecalculateBounds();
+        }
+
+        private void CreateOutline()
+        {
+            _outlineMesh = new Mesh { name = "UltraCraft.Outline", hideFlags = HideFlags.HideAndDontSave };
+            _outlineMesh.vertices = new Vector3[8];
+            // Minecraft's outline colour: black at 40% opacity.
+            var c = new Color32(0, 0, 0, 102);
+            _outlineMesh.colors32 = new[] { c, c, c, c, c, c, c, c };
+            _outlineMesh.SetIndices(new[] { 0,1, 1,2, 2,3, 3,0, 4,5, 5,6, 6,7, 7,4, 0,4, 1,5, 2,6, 3,7 },
+                                    MeshTopology.Lines, 0);
+            _outline = new GameObject("UltraCraft.Outline") { hideFlags = HideFlags.HideAndDontSave, layer = RenderLayer };
+            _outline.transform.SetParent(_root.transform, false);
+            _outline.AddComponent<MeshFilter>().sharedMesh = _outlineMesh;
+            var mr = _outline.AddComponent<MeshRenderer>();
+            Shader sh = Shader.Find("Sprites/Default") ?? Shader.Find("Unlit/Texture");
+            mr.sharedMaterial = new Material(sh) { hideFlags = HideFlags.HideAndDontSave, name = "UltraCraft.Outline" };
+            mr.shadowCastingMode = ShadowCastingMode.Off;
+            mr.receiveShadows = false;
+            _outline.SetActive(false);
         }
 
         private void EnsureFallback()

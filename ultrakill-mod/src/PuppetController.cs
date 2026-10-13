@@ -319,6 +319,99 @@ namespace UltraCraft
             }
         }
 
+        private int _weaponsReenabled;
+        private bool _eyeOffsetLogged;
+        private HudController[] _huds = new HudController[0];
+        private int _hudScanFrame = -1000;
+        private int _weaponHudHidden;
+
+        /// <summary>
+        /// Put ULTRAKILL's camera exactly at Minecraft's eye: feet + eyeHeight, mapped.
+        ///
+        /// Rotation already matches, but Minecraft casts its crosshair ray from feet + 1.62
+        /// blocks (less when sneaking) while ULTRAKILL's camera sat wherever its own player rig
+        /// puts it. A different origin means a different line: near targets showed an offset
+        /// between where you looked and what Minecraft hit, and some clicks on a block went
+        /// past it onto the floor (2026-10-13: "not every click breaks the block"). With the
+        /// camera at Minecraft's eye, the line you look down IS Minecraft's ray, and sneaking
+        /// lowers the view as it does in Minecraft. Runs after CameraController (execution
+        /// order 10000), overriding its local position each frame; its head-bob and shake
+        /// are lost, which is consistent with Minecraft owning movement.
+        /// </summary>
+        private void AlignEye()
+        {
+            if (_camera == null || _rb == null) return;
+            if (!_bridge.TryReadSlot(Protocol.OFFSET_CAMERA, Protocol.SLOTCAMERA_SIZE, out Protocol.SlotCamera cam)) return;
+            if (cam.eyeHeight <= 0f || cam.eyeHeight > 4f) return;   // older Minecraft build, or garbage
+            try
+            {
+                Vector3 feet = _rb.position + _ukFeetOffset;
+                Vector3 eye = feet + Vector3.up * (cam.eyeHeight * _scale);
+                Transform t = _camera.transform;
+                if (!_eyeOffsetLogged)
+                {
+                    _eyeOffsetLogged = true;
+                    Vector3 was = t.position - feet;
+                    Vector3 camObj = _camera.cam != null ? _camera.cam.transform.position - t.position : Vector3.zero;
+                    _log.LogInfo($"puppet: aligning camera to Minecraft's eye. ULTRAKILL camera was " +
+                                 $"{was.y / _scale:F3} blocks above the feet (horizontal {new Vector2(was.x, was.z).magnitude / _scale:F3}); " +
+                                 $"Minecraft eye is {cam.eyeHeight:F3}. Camera object offset from controller: {camObj}");
+                }
+                t.position = eye;
+            }
+            catch (Exception e)
+            {
+                _log.LogWarning($"puppet: eye alignment failed: {e.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Switch ULTRAKILL's guns off, with its own GunControl.NoWeapon(): hides the current
+        /// weapon (its firing scripts live on that object, so they stop) and clears
+        /// GunControl.activated, which gates weapon switching. Combat is Minecraft's; the guns
+        /// fired on the same mouse buttons and got in the way (user, 2026-10-13). ULTRAKILL
+        /// calls YesWeapon() from about ten places (level start, respawn, scripts), so this is
+        /// re-asserted every frame. Fists are left alone.
+        /// </summary>
+        private void DisableWeapons()
+        {
+            try
+            {
+                var gc = MonoSingleton<GunControl>.Instance;
+                if (gc == null) return;
+                if (gc.activated || (gc.currentWeapon != null && gc.currentWeapon.activeSelf))
+                {
+                    gc.NoWeapon();
+                    if (gc.currentWeapon != null) gc.currentWeapon.SetActive(false);
+                    gc.activated = false;
+                    _weaponsReenabled++;
+                    if (_weaponsReenabled <= 3 || _weaponsReenabled % 50 == 0)
+                        _log.LogInfo($"puppet: ULTRAKILL weapons switched off (time {_weaponsReenabled})");
+                }
+
+                // The weapon panel of the HUD (HudController.weaponIcon; ULTRAKILL toggles it
+                // itself from its HUD settings, so re-asserted too). The fist panel stays.
+                if (Time.frameCount - _hudScanFrame > 120)
+                {
+                    _hudScanFrame = Time.frameCount;
+                    _huds = UnityEngine.Object.FindObjectsOfType<HudController>();
+                }
+                foreach (var hud in _huds)
+                {
+                    if (hud != null && hud.weaponIcon != null && hud.weaponIcon.activeSelf)
+                    {
+                        hud.weaponIcon.SetActive(false);
+                        if (++_weaponHudHidden <= 3 || _weaponHudHidden % 50 == 0)
+                            _log.LogInfo($"puppet: hid ULTRAKILL weapon HUD '{hud.weaponIcon.name}' (time {_weaponHudHidden})");
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                _log.LogWarning($"puppet: could not switch ULTRAKILL weapons off: {e.Message}");
+            }
+        }
+
         private void MakeKinematic()
         {
             try
@@ -370,6 +463,7 @@ namespace UltraCraft
 
             // Every frame: ULTRAKILL re-enables its own movement on level start and respawn.
             DisableNativeMovement();
+            DisableWeapons();
 
             Protocol.SlotPlayer p;
             if (!_bridge.TryReadSlot(Protocol.OFFSET_PLAYER, Protocol.SLOTPLAYER_SIZE, out p)) return;
@@ -477,6 +571,7 @@ namespace UltraCraft
             LastMcPitch = p.pitch;
 
             ApplyLook(p.yaw, p.pitch);
+            AlignEye();
 
             // Only now is the camera actually pointing at the anchor heading, so this is
             // the first moment the ULTRAKILL basis can be sampled meaningfully.
@@ -773,7 +868,15 @@ namespace UltraCraft
             // wins. A comment claiming a verified sign is worse than no comment when it is
             // wrong, so this one records the report and the history rather than asserting
             // a convention that has not been confirmed.
-            _ukPitchAnchor = _mcPitchOrigin;
+            // 2026-10-13, MEASURED (13/13 logged samples): forwarded mouse-up made Minecraft's
+            // pitch INCREASE (look down), because Unity's delta is +up and Minecraft's
+            // accumulatedDY is screen coordinates, +down. Copying pitch with no negation
+            // cancelled that on screen, so the camera felt right while Minecraft looked the
+            // other way; the crosshair raycast (Milestone E) exposed it: look down, place above.
+            // InputApplier now flips the mouse into Minecraft's convention, and pitch maps with
+            // the negation the original derivation predicted. The camera feels the same; now
+            // Minecraft looks where ULTRAKILL shows.
+            _ukPitchAnchor = -_mcPitchOrigin;
 
             // The basis is NOT cached here. It has to be captured after the camera has actually
             // been rotated to the anchor heading, and at this point it has not been:
@@ -839,7 +942,7 @@ namespace UltraCraft
                 // UkToMcYaw negates, so the yaw delta negates too. Pitch maps through
                 // ApplyRotations as AngleAxis(-rotationX, right), hence the same sign.
                 LastUkYaw = _ukYawAnchor + YawSign * yawDelta;
-                LastUkPitch = _ukPitchAnchor + pitchDelta;
+                LastUkPitch = _ukPitchAnchor - pitchDelta;   // see _ukPitchAnchor: rotationX = -mcPitch
 
                 // WRAP THE YAW. This is not cosmetic, it is a hard requirement.
                 //
