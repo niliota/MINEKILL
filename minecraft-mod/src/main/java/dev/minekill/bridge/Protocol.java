@@ -4,9 +4,9 @@ package dev.minekill.bridge;
 
 public final class Protocol {
     public static final int MAGIC = 0x55544C52;
-    public static final int VERSION = 622094891;   // layout fingerprint
+    public static final int VERSION = 24450461;   // layout fingerprint
     public static final int HEADER_SIZE = 56;
-    public static final int TOTAL_SIZE = 3335712;
+    public static final int TOTAL_SIZE = 3434032;
     public static final int SEQ_SIZE = 4;
 
     public static final int FLAG_UK_MOVEMENT = 1;
@@ -335,7 +335,21 @@ public final class Protocol {
     public static final int TBL_COLLISION_INTEREST_REC_OFF_X = 0;  // Minecraft block coords, an entity cluster's centre
     public static final int TBL_COLLISION_INTEREST_REC_OFF_Y = 4;
     public static final int TBL_COLLISION_INTEREST_REC_OFF_Z = 8;
-    public static final int TBL_ENEMIES_OFFSET = 407464;  // ULTRAKILL -> Minecraft: live ULTRAKILL enemies near the player, for Minecraft to mirror as invisible proxy entities it can fight
+    public static final int TBL_BLOCK_COLLISION_OFFSET = 407464;  // Minecraft -> ULTRAKILL: Minecraft block collision boxes around the player (merged), for ULTRAKILL to make solid for its enemies and projectiles
+    public static final int TBL_BLOCK_COLLISION_SIZE = 98320;
+    public static final int TBL_BLOCK_COLLISION_CAPACITY = 4096;
+    public static final int TBL_BLOCK_COLLISION_OFF_SEQ = 0;  // seqlock, odd while writing
+    public static final int TBL_BLOCK_COLLISION_OFF_TICKTIMESTAMP = 4;  // epoch ms when Minecraft collected them
+    public static final int TBL_BLOCK_COLLISION_OFF_COUNT = 12;  // valid records, <= capacity
+    public static final int TBL_BLOCK_COLLISION_OFF_RECORDS = 16;
+    public static final int TBL_BLOCK_COLLISION_RECORD_SIZE = 24;
+    public static final int TBL_BLOCK_COLLISION_REC_OFF_MINX = 0;  // Minecraft block coords
+    public static final int TBL_BLOCK_COLLISION_REC_OFF_MINY = 4;
+    public static final int TBL_BLOCK_COLLISION_REC_OFF_MINZ = 8;
+    public static final int TBL_BLOCK_COLLISION_REC_OFF_MAXX = 12;
+    public static final int TBL_BLOCK_COLLISION_REC_OFF_MAXY = 16;
+    public static final int TBL_BLOCK_COLLISION_REC_OFF_MAXZ = 20;
+    public static final int TBL_ENEMIES_OFFSET = 505784;  // ULTRAKILL -> Minecraft: live ULTRAKILL enemies near the player, for Minecraft to mirror as invisible proxy entities it can fight
     public static final int TBL_ENEMIES_SIZE = 3608;
     public static final int TBL_ENEMIES_CAPACITY = 128;
     public static final int TBL_ENEMIES_OFF_SEQ = 0;  // seqlock, odd while writing
@@ -351,7 +365,7 @@ public final class Protocol {
     public static final int TBL_ENEMIES_REC_OFF_WIDTH = 16;  // blocks
     public static final int TBL_ENEMIES_REC_OFF_HEIGHT = 20;  // blocks
     public static final int TBL_ENEMIES_REC_OFF_HEALTH = 24;  // ULTRAKILL health (diagnostics)
-    public static final int TBL_GUI_OFFSET = 411072;  // Minecraft -> ULTRAKILL: every quad Minecraft's GUI draws this frame (HUD, text, items), in draw order, for ULTRAKILL to replay
+    public static final int TBL_GUI_OFFSET = 509392;  // Minecraft -> ULTRAKILL: every quad Minecraft's GUI draws this frame (HUD, text, items), in draw order, for ULTRAKILL to replay
     public static final int TBL_GUI_SIZE = 786472;
     public static final int TBL_GUI_CAPACITY = 32768;
     public static final int TBL_GUI_OFF_SEQ = 0;  // seqlock, odd while writing
@@ -370,7 +384,7 @@ public final class Protocol {
     public static final int TBL_GUI_REC_OFF_V = 12;
     public static final int TBL_GUI_REC_OFF_RGBA = 16;  // colour, r in the low byte
     public static final int TBL_GUI_REC_OFF_TEX = 20;  // GUI_TEX_* key
-    public static final int TBL_HAND_OFFSET = 1197544;  // Minecraft -> ULTRAKILL: Minecraft's first-person hands and held items this frame: posed, lit quads in Minecraft view space (camera looks down -z, y up), far first
+    public static final int TBL_HAND_OFFSET = 1295864;  // Minecraft -> ULTRAKILL: Minecraft's first-person hands and held items this frame: posed, lit quads in Minecraft view space (camera looks down -z, y up), far first
     public static final int TBL_HAND_SIZE = 229400;
     public static final int TBL_HAND_CAPACITY = 8192;
     public static final int TBL_HAND_OFF_SEQ = 0;  // seqlock, odd while writing
@@ -386,7 +400,7 @@ public final class Protocol {
     public static final int TBL_HAND_REC_OFF_V = 16;
     public static final int TBL_HAND_REC_OFF_RGBA = 20;  // colour with lighting applied, r in the low byte
     public static final int TBL_HAND_REC_OFF_TEX = 24;  // GUI_TEX_* key
-    public static final int TBL_WORLD_MODELS_OFFSET = 1426944;  // Minecraft -> ULTRAKILL: posed model geometry in the world this frame (entities, block entities, the player in third person, block-breaking cracks), unlit, in Minecraft block coords
+    public static final int TBL_WORLD_MODELS_OFFSET = 1525264;  // Minecraft -> ULTRAKILL: posed model geometry in the world this frame (entities, block entities, the player in third person, block-breaking cracks), unlit, in Minecraft block coords
     public static final int TBL_WORLD_MODELS_SIZE = 1835024;
     public static final int TBL_WORLD_MODELS_CAPACITY = 65536;
     public static final int TBL_WORLD_MODELS_OFF_SEQ = 0;  // seqlock, odd while writing
@@ -401,7 +415,7 @@ public final class Protocol {
     public static final int TBL_WORLD_MODELS_REC_OFF_V = 16;
     public static final int TBL_WORLD_MODELS_REC_OFF_RGBA = 20;  // tint, r in the low byte
     public static final int TBL_WORLD_MODELS_REC_OFF_TEX = 24;  // GUI_TEX_* key
-    public static final int TBL_PARTICLES_OFFSET = 3261968;  // Minecraft -> ULTRAKILL: Minecraft's live block particles (TerrainParticle), interpolated, for ULTRAKILL to draw as billboards
+    public static final int TBL_PARTICLES_OFFSET = 3360288;  // Minecraft -> ULTRAKILL: Minecraft's live block particles (TerrainParticle), interpolated, for ULTRAKILL to draw as billboards
     public static final int TBL_PARTICLES_SIZE = 73744;
     public static final int TBL_PARTICLES_CAPACITY = 2048;
     public static final int TBL_PARTICLES_OFF_SEQ = 0;  // seqlock, odd while writing

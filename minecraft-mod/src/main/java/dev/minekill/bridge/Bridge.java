@@ -580,6 +580,20 @@ public final class Bridge implements AutoCloseable {
         endWrite(b + Protocol.TBL_GUI_OFF_SEQ);
     }
 
+    /** Write the BLOCK_COLLISION table: {@code count} boxes, minX..maxZ each. */
+    public void writeBlockCollision(long ts, int count, float[] boxes) {
+        if (!connected) return;
+        if (count > Protocol.TBL_BLOCK_COLLISION_CAPACITY) count = Protocol.TBL_BLOCK_COLLISION_CAPACITY;
+        int b = Protocol.TBL_BLOCK_COLLISION_OFFSET;
+        beginWrite(b + Protocol.TBL_BLOCK_COLLISION_OFF_SEQ);
+        buf.putLong(b + Protocol.TBL_BLOCK_COLLISION_OFF_TICKTIMESTAMP, ts);
+        buf.putInt(b + Protocol.TBL_BLOCK_COLLISION_OFF_COUNT, count);
+        int r0 = b + Protocol.TBL_BLOCK_COLLISION_OFF_RECORDS;
+        for (int i = 0; i < count * 6; i++) buf.putFloat(r0 + i * 4, boxes[i]);
+        java.lang.invoke.VarHandle.releaseFence();
+        endWrite(b + Protocol.TBL_BLOCK_COLLISION_OFF_SEQ);
+    }
+
     /** Write the COLLISION_INTEREST table: {@code count} points, x,y,z each. */
     public void writeCollisionInterest(long ts, int count, float[] xyz) {
         if (!connected) return;

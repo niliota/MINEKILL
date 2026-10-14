@@ -504,6 +504,27 @@ namespace Minekill.Bridge
             return -1;
         }
 
+        /// <summary>Read the BLOCK_COLLISION boxes (6 floats each) into boxes; returns the count or -1, and the timestamp.</summary>
+        public int ReadBlockCollision(float[] boxes, out long timestamp)
+        {
+            timestamp = 0;
+            if (!Connected) return -1;
+            int b = Protocol.TBL_BLOCK_COLLISION_OFFSET;
+            for (int attempt = 0; attempt < 3; attempt++)
+            {
+                uint s1 = _view.ReadUInt32(b + Protocol.TBL_BLOCK_COLLISION_OFF_SEQ);
+                if ((s1 & 1) != 0) { Thread.SpinWait(16); continue; }
+                Thread.MemoryBarrier();
+                int count = (int)_view.ReadUInt32(b + Protocol.TBL_BLOCK_COLLISION_OFF_COUNT);
+                if (count < 0 || count > Protocol.TBL_BLOCK_COLLISION_CAPACITY || boxes.Length < count * 6) continue;
+                timestamp = _view.ReadInt64(b + Protocol.TBL_BLOCK_COLLISION_OFF_TICKTIMESTAMP);
+                if (count > 0) _view.ReadArray(b + Protocol.TBL_BLOCK_COLLISION_OFF_RECORDS, boxes, 0, count * 6);
+                Thread.MemoryBarrier();
+                if (_view.ReadUInt32(b + Protocol.TBL_BLOCK_COLLISION_OFF_SEQ) == s1) return count;
+            }
+            return -1;
+        }
+
         /// <summary>Read the COLLISION_INTEREST points (x,y,z each) into xyz; returns the count or -1.</summary>
         public int ReadCollisionInterest(float[] xyz)
         {

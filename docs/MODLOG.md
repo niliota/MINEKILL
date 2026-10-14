@@ -2554,3 +2554,26 @@ variance no longer moves them either. Both players fall together when movement s
 window covers the landing.
 
 User confirmed: blocks stay at the same height across restarts and full level reloads.
+
+### Minecraft blocks solid for ULTRAKILL
+
+- **BLOCK_COLLISION table** (MC -> UK, 4096 boxes): BlockCollisionExport scans the non-empty chunk
+  sections within 2 chunks and 2 sections of the player every 6 frames; full cubes are greedily
+  merged (x, z, y) into boxes, other shapes go as their collision AABBs. Written on change, and
+  every ~2 s regardless, so ULTRAKILL can drop a stale table (older than 5 s).
+- **BlockColliders** (UK): one pooled GameObject per box under a hidden root, on layer 8 (in
+  ULTRAKILL's Environment mask), with a BoxCollider (projectiles, physics enemies, explosions,
+  line of sight, the F5 camera) and a carving box NavMeshObstacle (ULTRAKILL's ground enemies
+  move on the navmesh, which ignores colliders). Placed with McBoxToUk. UnityEngine.AIModule
+  referenced.
+- **No echo:** CollisionPublisher's exact-box loop, collider tracking and the voxel probes ignore
+  these colliders (BlockColliders.IsOurs), so blocks never come back to Minecraft as ULTRAKILL
+  geometry.
+- First test: Stray projectiles hit the blocks, but Filth and Strays walked through. A navmesh
+  probe (temporary) was added; on the retest the owner reported enemies now respect the blocks.
+  The probe log: obstacle active with carving on, no navmesh left under the probed block and none
+  within ~0.5 block beside it (the carve margin), no errors. No functional code changed between the
+  two tests, so the first result was likely an older build or an obstacle that had not carved yet;
+  watch for it. Probe removed.
+
+User confirmed: Minecraft blocks are solid for ULTRAKILL enemies and their projectiles.

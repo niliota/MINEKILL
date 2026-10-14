@@ -78,6 +78,7 @@ namespace Minekill
         private InputForwarder _input;
         private CollisionPublisher _collision;
         private CombatBridge _combat;
+        private BlockColliders _blocks;
         private McWorldView _world;
         private HudView _hud;
         private int _focusFrames;
@@ -197,6 +198,9 @@ namespace Minekill
 
             if (_combat == null) _combat = new CombatBridge(_bridge, _puppet, Log);
             _combat.Tick();
+
+            if (_blocks == null) _blocks = new BlockColliders(_bridge, _puppet, Log);
+            _blocks.Tick();
 
             if (_world == null) _world = new McWorldView(_bridge, _puppet, Log);
             _world.Tick();
