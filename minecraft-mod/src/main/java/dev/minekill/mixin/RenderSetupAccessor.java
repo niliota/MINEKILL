@@ -10,4 +10,7 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 public interface RenderSetupAccessor {
     @Accessor("textures")
     Map<String, Object> minekill$textures();
+
+    @Accessor("textureTransform")
+    net.minecraft.client.renderer.rendertype.TextureTransform minekill$textureTransform();
 }

@@ -28,6 +28,11 @@ namespace Minekill
         private readonly byte[] _hand = new byte[Protocol.TBL_HAND_OFF_RECORDS + Protocol.TBL_HAND_CAPACITY * Protocol.TBL_HAND_RECORD_SIZE];
         private int _handCount;
         private Material _handMat;
+        /// <summary>ULTRAKILL's light at the camera, multiplied into the hand (smoothed).</summary>
+        private Color _handLight = Color.white;
+        private const int WorldLayer = 8;   // the layer Minecraft's world is drawn on (McWorldView)
+        /// <summary>The hand's share of the world light (owner, 2026-10-15: "a bit darker").</summary>
+        private const float HandLightScale = 0.75f;
         private int _scanFrame = -1000;
         private HudController[] _huds = new HudController[0];
         private Crosshair[] _crosshairs = new Crosshair[0];
@@ -96,6 +101,12 @@ namespace Minekill
         /// </summary>
         public void LateTick()
         {
+            if (_handCount > 0 && Camera.main != null)
+            {
+                Color target = WorldLight.At(Camera.main.transform.position, WorldLayer) * HandLightScale;
+                target.a = 1f;
+                _handLight = Color.Lerp(_handLight, target, 1f - Mathf.Exp(-12f * Time.unscaledDeltaTime));
+            }
             bool open = McScreenOpen && _count >= 0;
             if (open)
             {
@@ -123,6 +134,10 @@ namespace Minekill
         public void OnGUI()
         {
             if (Event.current.type != EventType.Repaint) return;
+            // The glint's additive shader depth-tests (it has no GUI ZTest switch like UI/Default):
+            // clear the depth the frame left, so the world cannot hide the glint on the hand and
+            // GUI items. Nothing after the GUI pass reads it.
+            if (_handCount > 0 || _count > 0) GL.Clear(true, false, Color.clear);
             DrawHand();
             if (_count <= 0) return;
             if (_mat == null)
@@ -143,12 +158,9 @@ namespace Minekill
                 {
                     if (drawing) { GL.End(); drawing = false; }
                     curKey = key;
-                    Texture tex = _world.GuiTexture(key);
-                    skip = tex == null;
+                    skip = !SetPass(key, _mat);
                     if (!skip)
                     {
-                        _mat.mainTexture = tex;
-                        _mat.SetPass(0);
                         GL.Begin(GL.QUADS);
                         drawing = true;
                     }
@@ -171,8 +183,31 @@ namespace Minekill
         }
 
         /// <summary>
+        /// Bind the material for texture key <paramref name="key"/>: <paramref name="normal"/> with
+        /// that texture, or the additive glint material for enchantment-glint quads. False when the
+        /// texture (or the glint shader) is not available; those quads are skipped.
+        /// </summary>
+        private bool SetPass(int key, Material normal)
+        {
+            if ((key & Protocol.MODEL_TEX_GLINT) != 0)
+            {
+                Material g = _world.GlintMaterial(key);
+                if (g == null) return false;
+                g.SetPass(0);
+                return true;
+            }
+            Texture tex = _world.GuiTexture(key);
+            if (tex == null) return false;
+            normal.mainTexture = tex;
+            normal.SetPass(0);
+            return true;
+        }
+
+        /// <summary>
         /// Minecraft's first-person hands and held item, under the GUI: view-space quads (already
-        /// posed, lit and sorted far first by Minecraft) drawn with Minecraft's own hand projection,
+        /// posed, shaded by Minecraft's two directional lights and sorted far first) drawn with
+        /// Minecraft's own hand projection and tinted by ULTRAKILL's light at the camera (WorldLight;
+        /// 2026-10-15: "make the player hand be shaded according to the world"),
         /// as Minecraft draws them with their own FOV over the world. UI/Default with its GUI depth
         /// test set to Always, so whatever depth the frame left behind does not cut into them.
         /// </summary>
@@ -200,12 +235,9 @@ namespace Minekill
                 {
                     if (drawing) { GL.End(); drawing = false; }
                     curKey = key;
-                    Texture tex = _world.GuiTexture(key);
-                    skip = tex == null;
+                    skip = !SetPass(key, _handMat);
                     if (!skip)
                     {
-                        _handMat.mainTexture = tex;
-                        _handMat.SetPass(0);
                         GL.Begin(GL.QUADS);
                         drawing = true;
                     }
@@ -215,7 +247,7 @@ namespace Minekill
                 {
                     int o = r0 + (q + k) * rs;
                     int c = BitConverter.ToInt32(_hand, o + Protocol.TBL_HAND_REC_OFF_RGBA);
-                    GL.Color(new Color32((byte)c, (byte)(c >> 8), (byte)(c >> 16), (byte)(c >> 24)));
+                    GL.Color((Color)new Color32((byte)c, (byte)(c >> 8), (byte)(c >> 16), (byte)(c >> 24)) * _handLight);
                     GL.TexCoord2(BitConverter.ToSingle(_hand, o + Protocol.TBL_HAND_REC_OFF_U),
                                  BitConverter.ToSingle(_hand, o + Protocol.TBL_HAND_REC_OFF_V));
                     GL.Vertex3(BitConverter.ToSingle(_hand, o + Protocol.TBL_HAND_REC_OFF_X),

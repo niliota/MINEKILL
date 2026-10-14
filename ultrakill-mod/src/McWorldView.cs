@@ -90,7 +90,10 @@ namespace Minekill
         private readonly List<Vector3> _pv = new List<Vector3>();
         private readonly List<Vector2> _puv = new List<Vector2>();
         private readonly List<Color32> _pc = new List<Color32>();
-        private readonly List<int> _pt = new List<int>();
+        /// <summary>Particle triangles per texture key (one submesh each), in first-seen order.</summary>
+        private readonly Dictionary<int, List<int>> _ptris = new Dictionary<int, List<int>>();
+        private readonly List<int> _pkeys = new List<int>();
+        private readonly List<Material> _pmats = new List<Material>();
         /// <summary>
         /// The vertex-lit cutout material (solid layer's Master clone + alpha test). Particles always
         /// use it, independent of the blocks' cutout choice: it is what gives them ULTRAKILL's
@@ -472,10 +475,11 @@ namespace Minekill
         }
 
         /// <summary>
-        /// Every frame after the camera is placed: Minecraft's block particles as billboards.
+        /// Every frame after the camera is placed: Minecraft's quad particles as billboards.
         /// Minecraft simulates them; this only draws the snapshot. Built in world space (each
         /// centre mapped through the root) so the quads face ULTRAKILL's real camera; the size is
-        /// Minecraft's half-size times the map's scale. Same atlas and cutout material as blocks.
+        /// Minecraft's half-size times the map's scale. Block debris uses the blocks' atlas and
+        /// cutout material; other particles (crits, smoke) their mirrored atlas, one submesh each.
         /// </summary>
         public void LateTick()
         {
@@ -491,7 +495,8 @@ namespace Minekill
             if (cam == null) return;
             Vector3 right = cam.transform.right, up = cam.transform.up;
             float scale = Mathf.Abs(_root.transform.lossyScale.y);
-            _pv.Clear(); _puv.Clear(); _pc.Clear(); _pt.Clear();
+            _pv.Clear(); _puv.Clear(); _pc.Clear(); _pkeys.Clear(); _pmats.Clear();
+            foreach (var l in _ptris.Values) l.Clear();
             for (int i = 0; i < n; i++)
             {
                 int o = i * Protocol.TBL_PARTICLES_RECORD_SIZE;
@@ -506,6 +511,10 @@ namespace Minekill
                 float v1 = BitConverter.ToSingle(_particleBytes, o + Protocol.TBL_PARTICLES_REC_OFF_V1);
                 int k = o + Protocol.TBL_PARTICLES_REC_OFF_RGBA;
                 var col = new Color32(_particleBytes[k], _particleBytes[k + 1], _particleBytes[k + 2], _particleBytes[k + 3]);
+                int key = BitConverter.ToInt32(_particleBytes, o + Protocol.TBL_PARTICLES_REC_OFF_TEX);
+                if (GuiTexture(key) == null) continue;         // its atlas has not arrived yet
+                if (!_ptris.TryGetValue(key, out List<int> tris)) _ptris[key] = tris = new List<int>();
+                if (tris.Count == 0) _pkeys.Add(key);
                 Vector3 r = right * s, u = up * s;
                 int b = _pv.Count;
                 // Clockwise as the camera sees it (Unity's front face). Minecraft's v grows
@@ -515,21 +524,28 @@ namespace Minekill
                 _pv.Add(c + r + u); _puv.Add(new Vector2(u1, v0));
                 _pv.Add(c + r - u); _puv.Add(new Vector2(u1, v1));
                 for (int q = 0; q < 4; q++) _pc.Add(col);
-                _pt.Add(b); _pt.Add(b + 1); _pt.Add(b + 2);
-                _pt.Add(b); _pt.Add(b + 2); _pt.Add(b + 3);
+                tris.Add(b); tris.Add(b + 1); tris.Add(b + 2);
+                tris.Add(b); tris.Add(b + 2); tris.Add(b + 3);
             }
+            if (_pkeys.Count == 0) { _particles.SetActive(false); return; }
             _particleMesh.Clear();
             _particleMesh.SetVertices(_pv);
             _particleMesh.SetUVs(0, _puv);
             _particleMesh.SetColors(_pc);
-            _particleMesh.SetTriangles(_pt, 0);
+            _particleMesh.subMeshCount = _pkeys.Count;
+            Material blockMat = _particleMat != null ? _particleMat : _litCutout != null ? _litCutout : _mats[Cutout] != null ? _mats[Cutout] : _fallback;
+            for (int i = 0; i < _pkeys.Count; i++)
+            {
+                _particleMesh.SetTriangles(_ptris[_pkeys[i]], i);
+                // Block debris: the blocks' particle material. Other atlases (particles, items):
+                // the same lit cutout template as the world models, with that texture.
+                _pmats.Add(_pkeys[i] == Protocol.GUI_TEX_BLOCKS ? blockMat : ModelMaterial(_pkeys[i]) ?? blockMat);
+            }
             // Facing the camera: the vertex lighting then shades each particle by the scene
             // lights around it, as a camera-facing sprite should be.
             _particleMesh.RecalculateNormals();
             _particleMesh.RecalculateBounds();
-            var mr = _particles.GetComponent<MeshRenderer>();
-            Material m = _particleMat != null ? _particleMat : _litCutout != null ? _litCutout : _mats[Cutout] != null ? _mats[Cutout] : _fallback;
-            if (mr.sharedMaterial != m) mr.sharedMaterial = m;
+            _particles.GetComponent<MeshRenderer>().sharedMaterials = _pmats.ToArray();
             if (!_particles.activeSelf) _particles.SetActive(true);
         }
 
@@ -568,6 +584,7 @@ namespace Minekill
                 if (GuiTexture(key & 0xFFFFFF) == null) continue;
                 bool multiply = (key & Protocol.MODEL_TEX_MULTIPLY) != 0;
                 if (multiply && _multiplyShader == null) continue;
+                if ((key & Protocol.MODEL_TEX_GLINT) != 0 && GlintMaterial(key) == null) continue;
                 if (!_mtris.TryGetValue(key, out List<int> tris)) _mtris[key] = tris = new List<int>();
                 if (tris.Count == 0) _mkeys.Add(key);
                 int b = _mv.Count;
@@ -668,8 +685,47 @@ namespace Minekill
             _log.LogInfo($"world: crack shader {(_multiplyShader != null ? _multiplyShader.name : "MISSING (cracks not drawn)")}");
         }
 
+        private Shader _additiveShader;
+        private bool _additiveSearched;
+        private readonly Dictionary<int, Material> _glintMats = new Dictionary<int, Material>();
+
+        /// <summary>
+        /// The material for enchantment-glint quads (MODEL_TEX_GLINT; Minecraft already transformed
+        /// their UVs and masked them to the item's opaque pixels): the glint texture added onto
+        /// what is behind, unlit, no depth write. Null when no additive shader is loaded or the
+        /// texture has not arrived. ULTRAKILL's additive particle shader, found among the loaded
+        /// shaders like the crack shader.
+        /// </summary>
+        public Material GlintMaterial(int key)
+        {
+            if (!_additiveSearched)
+            {
+                _additiveSearched = true;
+                var all = Resources.FindObjectsOfTypeAll<Shader>();
+                _additiveShader = all.FirstOrDefault(x => x != null && x.name == "Legacy Shaders/Particles/Additive")
+                               ?? all.FirstOrDefault(x => x != null && x.name.EndsWith("Particles/Additive"))
+                               ?? all.FirstOrDefault(x => x != null && x.name.EndsWith("/Additive"));
+                _log.LogInfo($"world: glint shader {(_additiveShader != null ? _additiveShader.name : "MISSING (enchantment glint not drawn)")}");
+            }
+            if (_additiveShader == null) return null;
+            Texture tex = GuiTexture(key & 0xFFFFFF);
+            if (tex == null) return null;
+            // Minecraft blurs the glint texture (its .mcmeta says "blur": true): sampled bilinearly,
+            // or the stretched texels show as lines (2026-10-15). The texture is only used here.
+            if (tex.filterMode != FilterMode.Bilinear) tex.filterMode = FilterMode.Bilinear;
+            if (_glintMats.TryGetValue(key, out Material m) && m != null) { m.mainTexture = tex; return m; }
+            m = new Material(_additiveShader) { hideFlags = HideFlags.HideAndDontSave, name = $"MINEKILL.Glint{key & 0xFFFFFF}" };
+            m.mainTexture = tex;
+            // Particles/Additive: 2 * vertex colour * tint * texture; a half tint leaves the
+            // vertex colour (Minecraft's glint strength) as the only scale.
+            if (m.HasProperty("_TintColor")) m.SetColor("_TintColor", new Color(0.5f, 0.5f, 0.5f, 0.5f));
+            _glintMats[key] = m;
+            return m;
+        }
+
         private Material ModelMaterial(int key)
         {
+            if ((key & Protocol.MODEL_TEX_GLINT) != 0) return GlintMaterial(key);
             if ((key & Protocol.MODEL_TEX_MULTIPLY) != 0)
             {
                 // Block-breaking cracks: Minecraft multiplies them into the block (white, nearly

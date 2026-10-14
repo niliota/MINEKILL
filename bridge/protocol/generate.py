@@ -264,7 +264,7 @@ TABLES = [
         ("tex","u32", "GUI_TEX_* key"),
      ]),
     ("PARTICLES", "Minecraft -> ULTRAKILL",
-     "Minecraft's live block particles (TerrainParticle), interpolated, for ULTRAKILL to draw as billboards", 2048, [
+     "Minecraft's live quad particles (block debris, crits, smoke, ...), interpolated, for ULTRAKILL to draw as billboards", 2048, [
         ("tickTimestamp","i64", "epoch ms of the frame that sampled them"),
         ("count","u32", "valid records, <= capacity"),
      ], [
@@ -272,11 +272,12 @@ TABLES = [
         ("y","f32", ""),
         ("z","f32", ""),
         ("size","f32", "half-size of the quad, blocks"),
-        ("u0","f32", "block-atlas UV rectangle"),
+        ("u0","f32", "UV rectangle in the texture named by tex"),
         ("v0","f32", ""),
         ("u1","f32", ""),
         ("v1","f32", ""),
         ("rgba","u32", "colour, r in the low byte"),
+        ("tex","u32", "GUI_TEX_* key: GUI_TEX_BLOCKS for block debris, a mirrored atlas (particles) otherwise"),
      ]),
 ]
 
@@ -320,6 +321,7 @@ STREAM = [
     ("GUI_TEX_BLOCKS", 2, "block atlas"),
     ("GUI_TEX_ITEMS", 3, "item atlas"),
     ("MODEL_TEX_MULTIPLY", 1 << 24, "WORLD_MODELS tex flag: multiply-blend decal (block-breaking cracks: Minecraft blends them as dst * src * 2)"),
+    ("MODEL_TEX_GLINT", 1 << 25, "WORLD_MODELS/HAND/GUI tex flag: enchantment glint overlay, drawn additively over the quad before it"),
     ("GUI_TEX_DYNAMIC_BASE", 16, "first key of textures mirrored through STREAM_MSG_TEXTURE (font sheets)"),
     ("STREAM_ATLAS_BLOCKS", 0, ""),
     ("STREAM_ATLAS_ITEMS", 1, ""),

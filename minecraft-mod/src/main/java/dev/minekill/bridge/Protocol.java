@@ -4,9 +4,9 @@ package dev.minekill.bridge;
 
 public final class Protocol {
     public static final int MAGIC = 0x55544C52;
-    public static final int VERSION = 24450461;   // layout fingerprint
+    public static final int VERSION = 2091326150;   // layout fingerprint
     public static final int HEADER_SIZE = 56;
-    public static final int TOTAL_SIZE = 3434032;
+    public static final int TOTAL_SIZE = 3442224;
     public static final int SEQ_SIZE = 4;
 
     public static final int FLAG_UK_MOVEMENT = 1;
@@ -297,6 +297,7 @@ public final class Protocol {
     public static final int GUI_TEX_BLOCKS = 2;  // block atlas
     public static final int GUI_TEX_ITEMS = 3;  // item atlas
     public static final int MODEL_TEX_MULTIPLY = 16777216;  // WORLD_MODELS tex flag: multiply-blend decal (block-breaking cracks: Minecraft blends them as dst * src * 2)
+    public static final int MODEL_TEX_GLINT = 33554432;  // WORLD_MODELS/HAND/GUI tex flag: enchantment glint overlay, drawn additively over the quad before it
     public static final int GUI_TEX_DYNAMIC_BASE = 16;  // first key of textures mirrored through STREAM_MSG_TEXTURE (font sheets)
     public static final int STREAM_ATLAS_BLOCKS = 0;
     public static final int STREAM_ATLAS_ITEMS = 1;
@@ -415,23 +416,24 @@ public final class Protocol {
     public static final int TBL_WORLD_MODELS_REC_OFF_V = 16;
     public static final int TBL_WORLD_MODELS_REC_OFF_RGBA = 20;  // tint, r in the low byte
     public static final int TBL_WORLD_MODELS_REC_OFF_TEX = 24;  // GUI_TEX_* key
-    public static final int TBL_PARTICLES_OFFSET = 3360288;  // Minecraft -> ULTRAKILL: Minecraft's live block particles (TerrainParticle), interpolated, for ULTRAKILL to draw as billboards
-    public static final int TBL_PARTICLES_SIZE = 73744;
+    public static final int TBL_PARTICLES_OFFSET = 3360288;  // Minecraft -> ULTRAKILL: Minecraft's live quad particles (block debris, crits, smoke, ...), interpolated, for ULTRAKILL to draw as billboards
+    public static final int TBL_PARTICLES_SIZE = 81936;
     public static final int TBL_PARTICLES_CAPACITY = 2048;
     public static final int TBL_PARTICLES_OFF_SEQ = 0;  // seqlock, odd while writing
     public static final int TBL_PARTICLES_OFF_TICKTIMESTAMP = 4;  // epoch ms of the frame that sampled them
     public static final int TBL_PARTICLES_OFF_COUNT = 12;  // valid records, <= capacity
     public static final int TBL_PARTICLES_OFF_RECORDS = 16;
-    public static final int TBL_PARTICLES_RECORD_SIZE = 36;
+    public static final int TBL_PARTICLES_RECORD_SIZE = 40;
     public static final int TBL_PARTICLES_REC_OFF_X = 0;  // Minecraft block coords, particle centre
     public static final int TBL_PARTICLES_REC_OFF_Y = 4;
     public static final int TBL_PARTICLES_REC_OFF_Z = 8;
     public static final int TBL_PARTICLES_REC_OFF_SIZE = 12;  // half-size of the quad, blocks
-    public static final int TBL_PARTICLES_REC_OFF_U0 = 16;  // block-atlas UV rectangle
+    public static final int TBL_PARTICLES_REC_OFF_U0 = 16;  // UV rectangle in the texture named by tex
     public static final int TBL_PARTICLES_REC_OFF_V0 = 20;
     public static final int TBL_PARTICLES_REC_OFF_U1 = 24;
     public static final int TBL_PARTICLES_REC_OFF_V1 = 28;
     public static final int TBL_PARTICLES_REC_OFF_RGBA = 32;  // colour, r in the low byte
+    public static final int TBL_PARTICLES_REC_OFF_TEX = 36;  // GUI_TEX_* key: GUI_TEX_BLOCKS for block debris, a mirrored atlas (particles) otherwise
 
     // Key bit flags carried by SLOT_INPUT, shared with the C# side.
     public static final int KEY_FORWARD = 1;
