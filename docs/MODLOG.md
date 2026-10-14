@@ -2601,3 +2601,13 @@ navmesh hole is shared by all agents; enemies shorter than that are kept out of 
 fit through, taller ones (none walking so far) could still pass under. Candidate replacement: mark
 the navmesh under hovering blocks with areas by gap height (local rebuild) and give each enemy an
 areaMask that excludes gaps lower than its body.
+
+## 2026-10-15 — the second punch never hits
+
+User: punching a Stray with an empty hand damages it once; every later punch misses forever.
+- Cause: EnemyProxies' per-proxy hurt cooldown started at `Long.MIN_VALUE`, so
+  `gameTime - lastHit` overflowed negative and every proxy was in its 10-tick cooldown forever.
+  Inside it only a stronger hit counts, by the difference: a 1-damage punch after a 1-damage punch
+  was dropped. Swords seemed fine because they hit harder and kill in one blow. The log showed it:
+  a Stray punched for 1.00 next took damage only from a 6.02 sword hit.
+- Fix: the sentinel is -1 ("never hit") and is checked before the subtraction.
