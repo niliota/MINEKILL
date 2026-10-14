@@ -19,7 +19,8 @@ import org.slf4j.LoggerFactory;
  * <p>GameRenderer.renderItemInHand poses the hands with the inverse view rotation (and its view
  * bob) and draws them with the view rotation as model-view. Each frame, the same submission is
  * replayed into a ModelCollector whose post-transform is that view rotation, giving quads in view
- * space, lit with Minecraft's world lights. They go out in the HAND table with the hand FOV; when
+ * space, shaded with Minecraft's two directional lights (ULTRAKILL applies its own light level).
+ * They go out in the HAND table with the hand FOV; when
  * Minecraft draws no hands (third person, hidden HUD, spectator) the table goes out empty.
  */
 public final class HandCapture {
@@ -51,7 +52,9 @@ public final class HandCapture {
     public void submit(FirstPersonHandsAndItemsRenderer renderer, float partialTicks, PoseStack poseStack,
                        PlayerRenderState player, FirstPersonHandsAndItemsRenderState state) {
         if (!active || camera == null) return;
-        collector.begin(new Matrix4f(camera.viewRotationMatrix), L0, L1, true, true);
+        // No light level: ULTRAKILL tints the hand by its own light at the camera, as it lights
+        // the blocks; Minecraft's light (full sky light in a void world) would not match.
+        collector.begin(new Matrix4f(camera.viewRotationMatrix), L0, L1, false, true);
         try {
             renderer.submitHandsWithItems(partialTicks, poseStack, collector, player, state);
             captured = true;

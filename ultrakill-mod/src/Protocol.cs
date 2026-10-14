@@ -7,9 +7,9 @@ namespace Minekill.Bridge
     public static class Protocol
     {
         public const uint MAGIC = 0x55544C52u;
-        public const uint VERSION = 24450461u;   // layout fingerprint
+        public const uint VERSION = 2091326150u;   // layout fingerprint
         public const int HEADER_SIZE = 56;
-        public const int TOTAL_SIZE = 3434032;
+        public const int TOTAL_SIZE = 3442224;
         public const int SEQ_SIZE = 4;
 
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -238,6 +238,7 @@ namespace Minekill.Bridge
         public const int GUI_TEX_BLOCKS = 2;  // block atlas
         public const int GUI_TEX_ITEMS = 3;  // item atlas
         public const int MODEL_TEX_MULTIPLY = 16777216;  // WORLD_MODELS tex flag: multiply-blend decal (block-breaking cracks: Minecraft blends them as dst * src * 2)
+        public const int MODEL_TEX_GLINT = 33554432;  // WORLD_MODELS/HAND/GUI tex flag: enchantment glint overlay, drawn additively over the quad before it
         public const int GUI_TEX_DYNAMIC_BASE = 16;  // first key of textures mirrored through STREAM_MSG_TEXTURE (font sheets)
         public const int STREAM_ATLAS_BLOCKS = 0;
         public const int STREAM_ATLAS_ITEMS = 1;
@@ -356,23 +357,24 @@ namespace Minekill.Bridge
         public const int TBL_WORLD_MODELS_REC_OFF_V = 16;
         public const int TBL_WORLD_MODELS_REC_OFF_RGBA = 20;  // tint, r in the low byte
         public const int TBL_WORLD_MODELS_REC_OFF_TEX = 24;  // GUI_TEX_* key
-        public const int TBL_PARTICLES_OFFSET = 3360288;  // Minecraft -> ULTRAKILL: Minecraft's live block particles (TerrainParticle), interpolated, for ULTRAKILL to draw as billboards
-        public const int TBL_PARTICLES_SIZE = 73744;
+        public const int TBL_PARTICLES_OFFSET = 3360288;  // Minecraft -> ULTRAKILL: Minecraft's live quad particles (block debris, crits, smoke, ...), interpolated, for ULTRAKILL to draw as billboards
+        public const int TBL_PARTICLES_SIZE = 81936;
         public const int TBL_PARTICLES_CAPACITY = 2048;
         public const int TBL_PARTICLES_OFF_SEQ = 0;  // seqlock, odd while writing
         public const int TBL_PARTICLES_OFF_TICKTIMESTAMP = 4;  // epoch ms of the frame that sampled them
         public const int TBL_PARTICLES_OFF_COUNT = 12;  // valid records, <= capacity
         public const int TBL_PARTICLES_OFF_RECORDS = 16;
-        public const int TBL_PARTICLES_RECORD_SIZE = 36;
+        public const int TBL_PARTICLES_RECORD_SIZE = 40;
         public const int TBL_PARTICLES_REC_OFF_X = 0;  // Minecraft block coords, particle centre
         public const int TBL_PARTICLES_REC_OFF_Y = 4;
         public const int TBL_PARTICLES_REC_OFF_Z = 8;
         public const int TBL_PARTICLES_REC_OFF_SIZE = 12;  // half-size of the quad, blocks
-        public const int TBL_PARTICLES_REC_OFF_U0 = 16;  // block-atlas UV rectangle
+        public const int TBL_PARTICLES_REC_OFF_U0 = 16;  // UV rectangle in the texture named by tex
         public const int TBL_PARTICLES_REC_OFF_V0 = 20;
         public const int TBL_PARTICLES_REC_OFF_U1 = 24;
         public const int TBL_PARTICLES_REC_OFF_V1 = 28;
         public const int TBL_PARTICLES_REC_OFF_RGBA = 32;  // colour, r in the low byte
+        public const int TBL_PARTICLES_REC_OFF_TEX = 36;  // GUI_TEX_* key: GUI_TEX_BLOCKS for block debris, a mirrored atlas (particles) otherwise
 
         // Key bit flags carried by SLOT_INPUT, shared with the Java side.
         public const uint KEY_FORWARD = 1u;

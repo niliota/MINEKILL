@@ -667,7 +667,7 @@ public final class Bridge implements AutoCloseable {
      * Write the PARTICLES table under its seqlock: x,y,z,size,u0,v0,u1,v1 (floats, 8 per particle)
      * and rgba (one int per particle).
      */
-    public void writeParticleTable(long tickTimestamp, float[] rec, int[] rgba, int count) {
+    public void writeParticleTable(long tickTimestamp, float[] rec, int[] rgba, int[] tex, int count) {
         if (!connected) return;
         if (count > Protocol.TBL_PARTICLES_CAPACITY) count = Protocol.TBL_PARTICLES_CAPACITY;
         int base = Protocol.TBL_PARTICLES_OFFSET;
@@ -686,6 +686,7 @@ public final class Bridge implements AutoCloseable {
             buf.putFloat(at + Protocol.TBL_PARTICLES_REC_OFF_U1, rec[o + 6]);
             buf.putFloat(at + Protocol.TBL_PARTICLES_REC_OFF_V1, rec[o + 7]);
             buf.putInt(at + Protocol.TBL_PARTICLES_REC_OFF_RGBA, rgba[i]);
+            buf.putInt(at + Protocol.TBL_PARTICLES_REC_OFF_TEX, tex[i]);
         }
         java.lang.invoke.VarHandle.releaseFence();
         endWrite(base + Protocol.TBL_PARTICLES_OFF_SEQ);

@@ -6,7 +6,7 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 import org.spongepowered.asm.mixin.gen.Invoker;
 
 /**
- * Colour and UV rectangle of a quad particle. The UV getters are protected and overridden by
+ * Colour, sprite and UV rectangle of a quad particle. The UV getters are protected and overridden by
  * TerrainParticle (which picks a random quarter-sized patch of the block's texture); invokers
  * dispatch virtually, so the override is what runs.
  */
@@ -16,6 +16,7 @@ public interface SingleQuadParticleAccessor {
     @Accessor("gCol") float minekill$g();
     @Accessor("bCol") float minekill$b();
     @Accessor("alpha") float minekill$alpha();
+    @Accessor("sprite") net.minecraft.client.renderer.texture.TextureAtlasSprite minekill$sprite();
     @Invoker("getU0") float minekill$u0();
     @Invoker("getU1") float minekill$u1();
     @Invoker("getV0") float minekill$v0();

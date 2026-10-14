@@ -46,6 +46,11 @@ public final class WorldModels {
     private static volatile List<BlockBreakingRenderState> breaking = List.of();
 
     private final ModelCollector collector = new ModelCollector();
+    {
+        // Depth-tested in ULTRAKILL: glint quads sit a hair off their base quad (blocks; a
+        // thousandth of a block cannot be seen but keeps the additive pass from flickering).
+        collector.glintLift = 0.001f;
+    }
     private final float[] xyz = new float[Protocol.TBL_WORLD_MODELS_CAPACITY * 3];
     private final float[] uv = new float[Protocol.TBL_WORLD_MODELS_CAPACITY * 2];
     private final int[] rgba = new int[Protocol.TBL_WORLD_MODELS_CAPACITY];

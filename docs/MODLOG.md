@@ -2611,3 +2611,62 @@ User: punching a Stray with an empty hand damages it once; every later punch mis
   was dropped. Swords seemed fine because they hit harder and kill in one blow. The log showed it:
   a Stray punched for 1.00 next took damage only from a 6.02 sword hit.
 - Fix: the sentinel is -1 ("never hit") and is checked before the subtraction.
+
+User confirmed: repeated punches land.
+
+## 2026-10-15 — critical-hit particles; the hand shaded by the level
+
+User: show Minecraft's critical-hit particles in ULTRAKILL, and shade the first-person hand by the
+world.
+- **Particles:** only block debris (TerrainParticle, block atlas) was exported. Crits come from a
+  TrackingEmitter that spawns CritParticles around the hit entity (the invisible proxy too); their
+  sprites live in the particle atlas. ParticleExport now sends every SingleQuadParticle with a new
+  `tex` field (GUI_TEX_* key): block debris GUI_TEX_BLOCKS, everything else the key of its sprite's
+  atlas through GuiTextures.keyForLocation, which mirrors the particle atlas on first use like the
+  chest/sign atlases. ULTRAKILL draws one submesh per texture: block debris with the particle
+  material as before, other atlases with the lit model template (ModelMaterial). This also brings
+  enchanted-hit, smoke, heart, damage and other quad particles. Protocol layout changed.
+- **Hand:** it was drawn unlit over the frame with Minecraft's light level baked in (full sky light
+  in the void world, so always bright). HandCapture no longer applies the light level (keeps
+  Minecraft's two directional face lights). ULTRAKILL multiplies the hand by WorldLight.At(camera):
+  light probes / ambient averaged over directions, plus realtime point/spot lights with Unity's
+  vertex-light falloff (1 / (1 + 25 d^2 / r^2), cut at the range) and directional lights at half
+  strength; smoothed, clamped to 1. An approximation of how the vertex-lit blocks are lit; tune
+  against the blocks next to the player.
+
+User confirmed: crit particles show (they are shaded by the level too, which the owner found
+fine), and the hand darkens in corridors; brightness left as is.
+
+## 2026-10-15 — enchantment glint
+
+User: Minecraft's enchantment glint does not render in ULTRAKILL.
+- Minecraft 26.3 has no separate glint pass for most things: the `*_glint` render types bind a
+  `GlintSampler` next to the base texture and the item/entity shaders add
+  `(GlintAlpha * glint(TextureMat * UV0))^2` where the base is opaque. TextureTransform scrolls the
+  glint in time, turns it 10 degrees and scales it (8 for items, 0.5 entities, 0.16 armour).
+  Shield patterns and trimmed armour still use a glint-only pass (Sampler0 = the glint texture).
+- ModelCollector now emits glint quads, flagged MODEL_TEX_GLINT (new protocol constant), right
+  after each quad they cover: for item models with a foil type, and for model render types with a
+  GlintSampler (armour, tridents, shields) or a glint-only Sampler0. The glint UVs are transformed
+  on the Minecraft side with the render type's own TextureTransform each frame (so it animates);
+  strength from Minecraft's glint-strength option. Flat item quads are cut into rectangles over the
+  sprite's opaque pixels (first frame, alpha >= 0.1, row runs merged downwards, cached per sprite),
+  since an unmasked additive quad would light the transparent part. Glint quads are nudged 0.002
+  along the normal and share the base quad's depth key (stable sort: base first).
+- ULTRAKILL draws them additively with its loaded "Particles/Additive" shader (looked up like the
+  crack shader; logged as `world: glint shader ...`), in world models, the hand and GUI items. The
+  GUI pass now clears depth first, because that shader depth-tests.
+- Approximation: the square in Minecraft's blend is not reproduced (scaled by strength^2 * 0.8);
+  models are not masked by their texture's transparency.
+
+User: glint shows everywhere, brightness fine; but it floats a little above the item and shows
+lines; and make the shaded hand a bit darker.
+- Floating: the 0.002 lift along the normal. It is only needed where the glint is depth-tested
+  (world models); the hand and GUI draw in painter's order. Now `ModelCollector.glintLift`, 0 by
+  default, 0.001 for WorldModels.
+- Lines: the glint texture was mirrored with point filtering like every GUI texture; Minecraft's
+  `enchanted_glint_*.png.mcmeta` sets `"blur": true`. GlintMaterial switches it to bilinear.
+- Hand: the world light is scaled by HandLightScale = 0.75.
+
+User confirmed: the glint sits flush and smooth everywhere it renders; the darker hand (0.75) is
+preferred.
