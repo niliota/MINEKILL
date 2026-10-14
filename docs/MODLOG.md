@@ -2577,3 +2577,27 @@ User confirmed: blocks stay at the same height across restarts and full level re
   watch for it. Probe removed.
 
 User confirmed: Minecraft blocks are solid for ULTRAKILL enemies and their projectiles.
+
+User: walled in, nothing gets through; but walking around, Strays pass through blocks (Filth much
+less), and a ring of blocks does not hold a Stray while a full box does. Suspects their navmesh
+"hitbox" is smaller than they look. Candidates from ULTRAKILL's code: (1) after being knocked into
+the air, `Enemy` lands with `NavMesh.SamplePosition(pos, 4 units)` + `Warp`, which ignores walls;
+(2) carving the navmesh away under an agent makes Unity re-place it at the nearest navmesh point,
+possibly across a thin wall; (3) a small agent radius against the visual body. Temporary
+diagnostic in BlockColliders: logs each frame an enemy's movement crosses a mirrored block (step
+size, agent state, kinematic, falling) and each enemy type's agent radius once.
+- Log: no crossing at foot height was ever recorded; agent radii Stray 2.0, Filth 3.0,
+  Swordsmachine 0.75 units on a navmesh built for radius 0.5 (carve margin 0.5 units); bodies
+  1.4 units wide, Stray 4.7 tall. The owner: Strays pass "if their feet are exposed". Cause: the
+  navmesh lies on the floor and carving only cuts where an obstacle reaches it, so a block hovering
+  above the floor was walked under. Each NavMeshObstacle now reaches 2.5 blocks below its block
+  (gap an enemy cannot fit through closed, higher gaps under roofs/bridges stay walkable); the
+  BoxCollider keeps the block's real size. Diagnostic removed.
+
+User confirmed: Strays and Filth no longer walk under hovering blocks; rings hold them. The owner
+calls it a workaround and noted it looks wrong on a Schism. Known limitation, kept on record
+(HANDOVER, sharp edges): the 2.5-block reach is one height for every enemy, because a carved
+navmesh hole is shared by all agents; enemies shorter than that are kept out of gaps they would
+fit through, taller ones (none walking so far) could still pass under. Candidate replacement: mark
+the navmesh under hovering blocks with areas by gap height (local rebuild) and give each enemy an
+areaMask that excludes gaps lower than its body.

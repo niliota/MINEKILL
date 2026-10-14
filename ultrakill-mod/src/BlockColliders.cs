@@ -17,6 +17,12 @@ namespace Minekill
     /// </summary>
     internal sealed class BlockColliders
     {
+        /// <summary>
+        /// Gap below a block (in blocks) that ULTRAKILL's walking enemies cannot fit under: a Stray's
+        /// body is 4.7 units tall (2.4 blocks), a Filth's 3.9.
+        /// </summary>
+        private const float ClearanceBlocks = 2.5f;
+
         /// <summary>ULTRAKILL's "Environment" layer (in LayerMaskDefaults' Environment mask).</summary>
         private const int EnvironmentLayer = 8;
 
@@ -85,8 +91,18 @@ namespace Minekill
                 Vector3 size = half * 2f;
                 var box = go.GetComponent<BoxCollider>();
                 if (box.size != size) box.size = size;
+                // The navmesh lies on the floor and carving only cuts where an obstacle reaches it,
+                // so a block hovering above the floor was walked under by enemies taller than the gap
+                // (2026-10-14: "the Stray passes through blocks if their feet are exposed"). For the
+                // navmesh, each box reaches down by an enemy's height: a gap lower than that is
+                // closed, a higher one (under a roof or a bridge) stays walkable. The collider keeps
+                // the block's real size.
+                float reach = ClearanceBlocks * _puppet.Scale;
+                var navSize = new Vector3(size.x, size.y + reach, size.z);
+                var navCenter = new Vector3(0f, -reach * 0.5f, 0f);
                 var obstacle = go.GetComponent<NavMeshObstacle>();
-                if (obstacle.size != size) obstacle.size = size;
+                if (obstacle.size != navSize) obstacle.size = navSize;
+                if (obstacle.center != navCenter) obstacle.center = navCenter;
                 if (!go.activeSelf) go.SetActive(true);
             }
             for (int i = n; i < _active; i++) _pool[i].SetActive(false);

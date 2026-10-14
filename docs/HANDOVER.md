@@ -48,7 +48,6 @@ ULTRAKILL; no images cross.
 
 - **Combat balance:** combat is built (proxies, shields, armour, death/restart); Minecraft hits
   currently kill small ULTRAKILL enemies in one blow (1:1 damage). Tune with the owner.
-- **ULTRAKILL enemies vs Minecraft blocks** (blocks do not stop enemies).
 - Missing visuals: sign text, name tags, burning-entity flames, unifont glyphs (rare characters),
   GUI scissoring (long lists), interpolated animation frames.
 - Native Windows: path and file-sharing support is in (`Platform.cs`, `Bridge.defaultPath`), never
@@ -153,6 +152,11 @@ The project repeatedly failed the same way: deriving a convention instead of mea
 - Materials: the alpha-tested model material is cloned from an ULTRAKILL material that already
   alpha-tests (forcing `ALPHA_TEST` on a vertex-lit clone falls back to a non-discarding variant).
   Cut-out blocks cull back faces; models keep the template's culling.
+- `BlockColliders`: each block's NavMeshObstacle reaches `ClearanceBlocks` (2.5) blocks below the
+  block, so enemies do not walk under hovering blocks (carving only cuts where an obstacle reaches
+  the navmesh on the floor). It is one height for every enemy: shorter enemies are kept out of
+  gaps they would fit through, taller ones could pass under. Suspect it first for any odd enemy
+  pathing near blocks (stopping short of a gap, detours under raised blocks, ledges, stairs).
 - `ModelCollector` builds models on the spot (`setupAnim` + `renderToBuffer`) exactly as
   `ModelFeatureRenderer` would; it relies on Minecraft calling `setupAnim` again before its own draw.
 
