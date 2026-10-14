@@ -176,9 +176,12 @@ public final class EnemyProxies {
         if (ukId == null || amount <= 0) return false;
         boolean fireOrExplosion = source.is(DamageTypeTags.IS_FIRE) || source.is(DamageTypeTags.IS_EXPLOSION);
         if (source.getEntity() == null && source.getDirectEntity() == null && !fireOrExplosion) return false;
-        long[] cd = COOLDOWN.computeIfAbsent(proxy.getId(), k -> new long[] {Long.MIN_VALUE, 0});
+        // {-1, 0}: never hit. (A Long.MIN_VALUE sentinel overflowed gameTime - cd[0] to a negative
+        // number, so every proxy stayed in its cooldown forever and a hit no stronger than the
+        // first never landed again: 2026-10-15, "the second punch never hits".)
+        long[] cd = COOLDOWN.computeIfAbsent(proxy.getId(), k -> new long[] {-1, 0});
         float dealt = amount;
-        if (gameTime - cd[0] < INVULNERABLE_TICKS) {
+        if (cd[0] >= 0 && gameTime - cd[0] < INVULNERABLE_TICKS) {
             float last = Float.intBitsToFloat((int) cd[1]);
             if (amount <= last) return false;
             dealt = amount - last;      // as Minecraft does inside its hurt cooldown
