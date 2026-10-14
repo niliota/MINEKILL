@@ -35,6 +35,7 @@ public class MinekillClient implements ClientModInitializer {
     private final dev.minekill.render.ParticleExport particles = new dev.minekill.render.ParticleExport();
     private final dev.minekill.render.WorldModels worldModels = new dev.minekill.render.WorldModels();
     private final CollisionInterest collisionInterest = new CollisionInterest();
+    private final BlockCollisionExport blockCollision = new BlockCollisionExport();
     private final EnemyProxies enemyProxies = new EnemyProxies();
     private boolean wasDead;
 
@@ -205,6 +206,7 @@ public class MinekillClient implements ClientModInitializer {
         if (ukAlive) particles.frame(mc, bridge);
         if (ukAlive) worldModels.frame(mc, bridge);
         if (ukAlive) collisionInterest.frame(mc, bridge);
+        if (ukAlive) blockCollision.frame(mc, bridge);
         enemyProxies.frame(mc, bridge, ukAlive);
         reportRespawn(mc);
         if (ukAlive && stream != null && stream.ok()) dev.minekill.gui.GuiTextures.flush(stream);

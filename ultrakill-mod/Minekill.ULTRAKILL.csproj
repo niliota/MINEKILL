@@ -51,6 +51,10 @@
       <HintPath>$(GameDir)/ULTRAKILL_Data/Managed/UnityEngine.CoreModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="UnityEngine.AIModule">
+      <HintPath>$(GameDir)/ULTRAKILL_Data/Managed/UnityEngine.AIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="UnityEngine.PhysicsModule">
       <HintPath>$(GameDir)/ULTRAKILL_Data/Managed/UnityEngine.PhysicsModule.dll</HintPath>
       <Private>false</Private>

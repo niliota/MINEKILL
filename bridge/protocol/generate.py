@@ -193,6 +193,18 @@ TABLES = [
         ("y","f32", ""),
         ("z","f32", ""),
      ]),
+    ("BLOCK_COLLISION", "Minecraft -> ULTRAKILL",
+     "Minecraft block collision boxes around the player (merged), for ULTRAKILL to make solid for its enemies and projectiles", 4096, [
+        ("tickTimestamp","i64", "epoch ms when Minecraft collected them"),
+        ("count","u32", "valid records, <= capacity"),
+     ], [
+        ("minX","f32", "Minecraft block coords"),
+        ("minY","f32", ""),
+        ("minZ","f32", ""),
+        ("maxX","f32", ""),
+        ("maxY","f32", ""),
+        ("maxZ","f32", ""),
+     ]),
     ("ENEMIES", "ULTRAKILL -> Minecraft",
      "live ULTRAKILL enemies near the player, for Minecraft to mirror as invisible proxy entities it can fight", 128, [
         ("tickTimestamp","i64", "epoch ms when ULTRAKILL sampled them"),

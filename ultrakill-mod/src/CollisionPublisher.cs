@@ -108,7 +108,7 @@ namespace Minekill
 
         /// <summary>Colliders the voxel probes must not count: the puppet, and exact boxes.</summary>
         private bool IgnoreForVoxels(Collider c) =>
-            c.attachedRigidbody == _puppet.PlayerBody || IsExactBox(c);
+            c.attachedRigidbody == _puppet.PlayerBody || IsExactBox(c) || BlockColliders.IsOurs(c);
 
         /// <summary>Is this an axis-aligned BoxCollider (sent exactly)? Cached per collider per mapping.</summary>
         private bool IsExactBox(Collider c)
@@ -192,6 +192,7 @@ namespace Minekill
                 Collider c = _hits[i];
                 if (c == null || !c.enabled) continue;
                 if (c.attachedRigidbody == body) continue;   // the puppet itself
+                if (BlockColliders.IsOurs(c)) continue;      // Minecraft's own blocks, mirrored
 
                 if (c is BoxCollider box && IsExactBox(c) && TryAxisAligned(box, out Vector3 mn, out Vector3 mx))
                 {
@@ -366,7 +367,7 @@ namespace Minekill
             for (int i = 0; i < n; i++)
             {
                 Collider c = _hits[i];
-                if (c == null || !c.enabled || c.attachedRigidbody == body) continue;
+                if (c == null || !c.enabled || c.attachedRigidbody == body || BlockColliders.IsOurs(c)) continue;
                 int id = c.GetInstanceID();
                 _present.Add(id);
                 McBounds(c.bounds, out Vector3 mn, out Vector3 mx);
