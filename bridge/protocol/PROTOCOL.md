@@ -420,6 +420,7 @@ single-consumer byte ring; records are 8-byte aligned `u32 type, u32 length, pay
 | `GUI_TEX_BLOCKS` | 2 | block atlas |
 | `GUI_TEX_ITEMS` | 3 | item atlas |
 | `MODEL_TEX_MULTIPLY` | 16777216 | WORLD_MODELS tex flag: multiply-blend decal (block-breaking cracks: Minecraft blends them as dst * src * 2) |
+| `MODEL_TEX_BLEND` | 67108864 | WORLD_MODELS tex flag: alpha-blended, unlit (the translucent panel behind name tags) |
 | `MODEL_TEX_GLINT` | 33554432 | WORLD_MODELS/HAND/GUI tex flag: enchantment glint overlay, drawn additively over the quad before it |
 | `GUI_TEX_DYNAMIC_BASE` | 16 | first key of textures mirrored through STREAM_MSG_TEXTURE (font sheets) |
 | `STREAM_ATLAS_BLOCKS` | 0 |  |

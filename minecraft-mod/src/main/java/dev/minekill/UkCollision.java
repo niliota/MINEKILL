@@ -151,26 +151,53 @@ public final class UkCollision {
 
     /** Horizontal margin for the pathfinding questions: a box clipping a cell's edge does not count. */
     private static final double PATH_MARGIN = 0.2;
-    /** A floor this thin at the top of a cell is the cell above's floor, not a wall in this one. */
-    private static final double PATH_SLIVER = 0.2;
 
     /**
      * Pathfinding: does ULTRAKILL's geometry fill block cell (x,y,z), the way a solid block
      * would? Checked without allocating (pathfinding asks this thousands of times per path).
+     *
+     * <p>ULTRAKILL floors are not block-aligned, so this follows the rule Minecraft itself uses
+     * to place a mob standing on ground: its start cell is {@code floor(feetY + 0.5)}. A surface
+     * in the lower half of a cell is that cell's floor; one in the upper half is the next cell's.
+     * So cell y is solid when geometry fills its upper half (A), or when a surface lies in the
+     * lower half of the cell above (B: it is that cell's floor, however thin the box under it).
+     * The old rule (a fixed 0.2 margin at the top) put mobs on floors 0.2-0.5 into a cell inside a
+     * "solid" cell, so their paths started where Minecraft thought there was a wall (2026-10-15).
      */
     public static boolean blocksCell(int x, int y, int z) {
         Snapshot s = current;
         if (s.boxes.length == 0) return false;
         double x0 = x + PATH_MARGIN, x1 = x + 1 - PATH_MARGIN, z0 = z + PATH_MARGIN, z1 = z + 1 - PATH_MARGIN;
-        double y0 = y + PATH_SLIVER, y1 = y + 1 - 0.01;
+        for (int i : s.big) if (fillsCell(s.boxes[i], x0, z0, x1, z1, y)) return true;
+        int[] list = s.grid.get(cellKey(Math.floorDiv(x, CELL), Math.floorDiv(z, CELL)));
+        if (list != null) for (int i : list) if (fillsCell(s.boxes[i], x0, z0, x1, z1, y)) return true;
+        return false;
+    }
+
+    /**
+     * Fluids: the rule pathfinding used before 2026-10-15 (a box filling the cell except its top
+     * 0.2 blocks), kept for water and lava, which the owner confirmed with it. A floor reaching
+     * less than 0.2 into a cell is the floor of that cell.
+     */
+    public static boolean blocksCellForFluid(int x, int y, int z) {
+        Snapshot s = current;
+        if (s.boxes.length == 0) return false;
+        double x0 = x + PATH_MARGIN, x1 = x + 1 - PATH_MARGIN, z0 = z + PATH_MARGIN, z1 = z + 1 - PATH_MARGIN;
+        double y0 = y + 0.2, y1 = y + 1 - 0.01;
         for (int i : s.big) if (overlaps(s.boxes[i], x0, y0, z0, x1, y1, z1)) return true;
         int[] list = s.grid.get(cellKey(Math.floorDiv(x, CELL), Math.floorDiv(z, CELL)));
         if (list != null) for (int i : list) if (overlaps(s.boxes[i], x0, y0, z0, x1, y1, z1)) return true;
         return false;
     }
 
+    private static boolean fillsCell(AABB b, double x0, double z0, double x1, double z1, int y) {
+        if (b.maxX <= x0 || b.minX >= x1 || b.maxZ <= z0 || b.minZ >= z1) return false;
+        if (b.minY < y + 1 && b.maxY > y + 0.5) return true;          // A: the upper half is filled
+        return b.maxY > y + 1 && b.maxY <= y + 1.5;                     // B: the floor of the cell above
+    }
+
     /**
-     * Pathfinding: the highest ULTRAKILL surface in column (x,z) between {@code yMin} and
+     * Pathfinding: the highest ULTRAKILL surface in column (x,z) above {@code yMin} and at most
      * {@code yMax}, or NaN. Minecraft's floor level comes from the block below's collision shape,
      * which is empty over an ULTRAKILL floor.
      */

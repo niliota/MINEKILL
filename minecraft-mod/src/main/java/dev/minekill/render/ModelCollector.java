@@ -492,11 +492,118 @@ public final class ModelCollector implements SubmitNodeCollector {
         glintKey = -1;
     }
 
+    // ---- text: sign text and name tags ----------------------------------------
+    //
+    // As Minecraft's TextFeatureRenderer does: Font.prepareText turns the string into glyph quads
+    // on the font sheets, which GuiTextures already mirrors for the GUI. The world-model material
+    // is alpha-tested, so glyph quads get full vertex alpha (the glyph's own alpha cuts it out).
+    // The translucent panel behind a name tag goes out flagged MODEL_TEX_BLEND (ULTRAKILL blends
+    // it) and pushed a hair away from the camera, so the text in front wins the depth test.
+
+    private final net.minecraft.client.gui.Font.GlyphVisitor glyphs = new net.minecraft.client.gui.Font.GlyphVisitor() {
+        @Override
+        public void acceptRenderable(net.minecraft.client.gui.font.TextRenderable r) {
+            int tex = GuiTextures.key(Minecraft.getInstance(), r.textureView());
+            if (tex < 0) return;
+            int first = quads.size();
+            builder.start(tex, textBright);
+            r.render(textPose, builder, textLight, false);
+            builder.finish();
+            for (int i = quads.size() - 1; i >= first; i--) {
+                Quad q = quads.get(i);
+                if (tex == Protocol.GUI_TEX_NONE && (q.rgba >>> 24) < 0xE0) {          // background panel
+                    q.tex = Protocol.GUI_TEX_NONE | Protocol.MODEL_TEX_BLEND;
+                    behind(q, 0.01f);
+                } else {
+                    q.rgba |= 0xFF000000;
+                    if (textLift != 0) lift(q, textLift);
+                }
+            }
+        }
+    };
+    private final Matrix4f textPose = new Matrix4f();
+    private int textLight;
+    private float textBright, textLift;
+
+    private void text(Matrix4fc pose, float x, float y, net.minecraft.util.FormattedCharSequence string, boolean dropShadow,
+                      int light, int color, int backgroundColor, int outlineColor) {
+        var font = Minecraft.getInstance().font;
+        textPose.set(pose);
+        textLight = light;
+        textBright = brightness(light);
+        textLift = 0;
+        try {
+            if (outlineColor == 0) {
+                font.prepareText(string, x, y, color, dropShadow, false, backgroundColor).visit(glyphs);
+            } else {
+                // Glowing sign text: an 8-way outline, then the text over it (Minecraft draws the
+                // text with polygon offset; here it is lifted off the outline instead).
+                font.prepare8xTextOutline(string, x, y, outlineColor).visit(glyphs);
+                textLift = 0.0005f;
+                font.prepareText(string, x, y, color, false, false, 0).visit(glyphs);
+            }
+        } catch (RuntimeException e) {
+            if (!textFailureLogged) {
+                textFailureLogged = true;
+                LoggerFactory.getLogger("minekill").warn("[MINEKILL] model: text failed: {}", e.toString());
+            }
+        }
+    }
+
+    private static boolean textFailureLogged;
+
+    /** Move a quad by {@code amount} away from Minecraft's camera (world models: block coords). */
+    private static void behind(Quad q, float amount) {
+        var cam = Minecraft.getInstance().gameRenderer.mainCamera().position();
+        for (int i = 0; i < 4; i++) {
+            double dx = q.x[i] - cam.x, dy = q.y[i] - cam.y, dz = q.z[i] - cam.z;
+            double len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            if (len < 1e-6) continue;
+            q.x[i] += (float) (dx / len * amount); q.y[i] += (float) (dy / len * amount); q.z[i] += (float) (dz / len * amount);
+        }
+    }
+
+    /** Move a quad by {@code amount} towards its front (counter-clockwise) side. */
+    private static void lift(Quad q, float amount) {
+        float ax = q.x[1] - q.x[0], ay = q.y[1] - q.y[0], az = q.z[1] - q.z[0];
+        float bx = q.x[2] - q.x[0], by = q.y[2] - q.y[0], bz = q.z[2] - q.z[0];
+        float nx = ay * bz - az * by, ny = az * bx - ax * bz, nz = ax * by - ay * bx;
+        float len = (float) Math.sqrt(nx * nx + ny * ny + nz * nz);
+        if (len == 0) return;
+        float k = amount / len;
+        for (int i = 0; i < 4; i++) { q.x[i] += nx * k; q.y[i] += ny * k; q.z[i] += nz * k; }
+    }
+
+    /** Sign text (front and back), and any other text a renderer submits in the world. */
+    @Override
+    public void submitText(PoseStack poseStack, float x, float y, net.minecraft.util.FormattedCharSequence string, boolean dropShadow,
+                           net.minecraft.client.gui.Font.DisplayMode mode, int light, int color, int backgroundColor, int outlineColor) {
+        text(poseStack.last().pose(), x, y, string, dropShadow, light, color, backgroundColor, outlineColor);
+    }
+
+    /**
+     * A name tag, placed exactly as SubmitNodeCollection.submitNameTag does: half a block above the
+     * attachment point, facing the camera, 0.025 blocks per font pixel, centred, on Minecraft's
+     * translucent panel (text background opacity option). The text is drawn opaque white;
+     * Minecraft's see-through copy behind walls is not reproduced.
+     */
+    @Override
+    public void submitNameTag(PoseStack poseStack, net.minecraft.world.phys.Vec3 attachment, int offset, net.minecraft.network.chat.Component name,
+                              boolean seeThrough, int light, net.minecraft.client.renderer.state.level.CameraRenderState camera) {
+        if (attachment == null || name == null || camera == null) return;
+        poseStack.pushPose();
+        poseStack.translate(attachment.x, attachment.y + 0.5, attachment.z);
+        poseStack.rotate(camera.orientation);
+        poseStack.scale(0.025f, -0.025f, 0.025f);
+        float x = -Minecraft.getInstance().font.width(name) / 2.0f;
+        int background = Math.round(Minecraft.getInstance().options.getBackgroundOpacity(0.25f) * 255) << 24;
+        text(poseStack.last().pose(), x, offset, name.getVisualOrderText(), false, light, 0xFFFFFFFF, background, 0);
+        poseStack.popPose();
+    }
+
     // ---- not models: ignored ----------------------------------------------------
 
     @Override public void submitShadow(PoseStack p, float f, java.util.List<net.minecraft.client.renderer.entity.state.EntityRenderState.ShadowPiece> l) {}
-    @Override public void submitNameTag(PoseStack p, net.minecraft.world.phys.Vec3 v, int i, net.minecraft.network.chat.Component c, boolean b, int j, net.minecraft.client.renderer.state.level.CameraRenderState s) {}
-    @Override public void submitText(PoseStack p, float x, float y, net.minecraft.util.FormattedCharSequence t, boolean d, net.minecraft.client.gui.Font.DisplayMode m, int a, int b, int c, int e) {}
     @Override public void submitTextBackground(PoseStack p, float a, float b, float c, float d, int e, net.minecraft.client.gui.Font.DisplayMode m, int f) {}
     @Override public void submitFlame(PoseStack p, net.minecraft.client.renderer.entity.state.EntityRenderState s, org.joml.Quaternionf q) {}
     @Override public void submitLeash(PoseStack p, net.minecraft.client.renderer.entity.state.EntityRenderState.LeashState s) {}
