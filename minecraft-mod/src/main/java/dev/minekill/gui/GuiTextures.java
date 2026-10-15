@@ -185,6 +185,20 @@ public final class GuiTextures {
         Mirror m = MIRRORS.computeIfAbsent(tex, t -> new Mirror(nextKey++, t.getWidth(0), t.getHeight(0)));
         try {
             Class<?> c = bitmap.getClass();
+            if (c.getName().startsWith("net.minecraft.client.gui.font.glyphs.SpecialGlyphs$")) {
+                // The font's generated glyphs: WHITE (5x8 solid, used for text backgrounds such as
+                // the panel behind name tags, underlines and strikethrough) and MISSING (a box).
+                // Their image is a field of the enum constant the bitmap belongs to.
+                if (specialOuter == null) {
+                    specialOuter = c.getDeclaredField("this$0");
+                    specialOuter.setAccessible(true);
+                    specialImage = specialOuter.getType().getDeclaredField("image");
+                    specialImage.setAccessible(true);
+                }
+                NativeImage img = (NativeImage) specialImage.get(specialOuter.get(bitmap));
+                copyGlyph(m, img, 0, 0, img.getWidth(), img.getHeight(), x, y);
+                return;
+            }
             if (!c.getName().startsWith("net.minecraft.client.gui.font.providers.BitmapProvider$Glyph")) {
                 if (UNSUPPORTED_LOGGED.add(c)) LOG.info("[MINEKILL] gui: glyph bitmap type {} not mirrored yet", c.getName());
                 return;
@@ -204,24 +218,31 @@ public final class GuiTextures {
             int ox = (int) offX.invoke(glyph), oy = (int) offY.invoke(glyph);
             int w = (int) gw.invoke(glyph), h = (int) gh.invoke(glyph);
             NativeImage img = (NativeImage) imageField.get(imageData.invoke(glyph));
-            for (int j = 0; j < h; j++) {
-                int ty = y + j;
-                if (ty < 0 || ty >= m.h) continue;
-                for (int i = 0; i < w; i++) {
-                    int tx = x + i;
-                    if (tx < 0 || tx >= m.w) continue;
-                    int argb = img.getPixel(ox + i, oy + j);
-                    int o = (ty * m.w + tx) * 4;
-                    m.rgba[o] = (byte) (argb >> 16);
-                    m.rgba[o + 1] = (byte) (argb >> 8);
-                    m.rgba[o + 2] = (byte) argb;
-                    m.rgba[o + 3] = (byte) (argb >>> 24);
-                }
-            }
-            m.dirty(x, y, w, h);
+            copyGlyph(m, img, ox, oy, w, h, x, y);
         } catch (ReflectiveOperationException | RuntimeException e) {
             if (UNSUPPORTED_LOGGED.add(bitmap.getClass())) LOG.warn("[MINEKILL] gui: glyph mirror failed: {}", e.toString());
         }
+    }
+
+    private static Field specialOuter, specialImage;
+
+    /** Copy a w x h region of {@code img} at (ox, oy) to the mirror at (x, y), and mark it dirty. */
+    private static void copyGlyph(Mirror m, NativeImage img, int ox, int oy, int w, int h, int x, int y) {
+        for (int j = 0; j < h; j++) {
+            int ty = y + j;
+            if (ty < 0 || ty >= m.h) continue;
+            for (int i = 0; i < w; i++) {
+                int tx = x + i;
+                if (tx < 0 || tx >= m.w) continue;
+                int argb = img.getPixel(ox + i, oy + j);
+                int o = (ty * m.w + tx) * 4;
+                m.rgba[o] = (byte) (argb >> 16);
+                m.rgba[o + 1] = (byte) (argb >> 8);
+                m.rgba[o + 2] = (byte) argb;
+                m.rgba[o + 3] = (byte) (argb >>> 24);
+            }
+        }
+        m.dirty(x, y, w, h);
     }
 
     /** Everything again (ULTRAKILL resynced). */

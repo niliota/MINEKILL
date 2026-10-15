@@ -501,8 +501,21 @@ public final class ModelCollector implements SubmitNodeCollector {
     // it) and pushed a hair away from the camera, so the text in front wins the depth test.
 
     private final net.minecraft.client.gui.Font.GlyphVisitor glyphs = new net.minecraft.client.gui.Font.GlyphVisitor() {
+        /**
+         * Effects: the background panel, underline, strikethrough; all drawn with the font's WHITE
+         * glyph on a font sheet (mirrored by GuiTextures). A translucent one is the panel.
+         */
+        @Override
+        public void acceptEffect(net.minecraft.client.gui.font.TextRenderable r) {
+            emit(r, true);
+        }
+
         @Override
         public void acceptRenderable(net.minecraft.client.gui.font.TextRenderable r) {
+            emit(r, false);
+        }
+
+        private void emit(net.minecraft.client.gui.font.TextRenderable r, boolean effect) {
             int tex = GuiTextures.key(Minecraft.getInstance(), r.textureView());
             if (tex < 0) return;
             int first = quads.size();
@@ -511,8 +524,8 @@ public final class ModelCollector implements SubmitNodeCollector {
             builder.finish();
             for (int i = quads.size() - 1; i >= first; i--) {
                 Quad q = quads.get(i);
-                if (tex == Protocol.GUI_TEX_NONE && (q.rgba >>> 24) < 0xE0) {          // background panel
-                    q.tex = Protocol.GUI_TEX_NONE | Protocol.MODEL_TEX_BLEND;
+                if (effect && (q.rgba >>> 24) < 0xE0) {                                  // background panel
+                    q.tex = tex | Protocol.MODEL_TEX_BLEND;
                     behind(q, 0.01f);
                 } else {
                     q.rgba |= 0xFF000000;

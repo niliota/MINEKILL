@@ -48,7 +48,7 @@ ULTRAKILL; no images cross.
 
 - **Combat balance:** combat is built (proxies, shields, armour, death/restart); Minecraft hits
   currently kill small ULTRAKILL enemies in one blow (1:1 damage). Tune with the owner.
-- Missing visuals: name-tag background panel, burning-entity flames, unifont glyphs (rare characters),
+- Missing visuals: burning-entity flames, unifont glyphs (rare characters),
   GUI scissoring (long lists), interpolated animation frames.
 - Native Windows: path and file-sharing support is in (`Platform.cs`, `Bridge.defaultPath`), never
   run.
