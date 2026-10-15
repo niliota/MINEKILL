@@ -39,6 +39,7 @@
     "FallingBlockEntityMixin",
     "SignSupportMixin",
     "WallHangingSignMixin",
+    "SignTextGlowMixin",
     "ProjectileMixin",
     "InputConstantsMixin",
     "LivingEntityProxyMixin",
