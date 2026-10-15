@@ -2801,3 +2801,15 @@ shift in shading, turn lighter or completely black.
   object (ModelBatch), so each gets the lights around it. Particles are still one object.
 
 User confirmed: model shading no longer shifts with the camera; falling blocks render.
+
+## 2026-10-15 — glowing sign text
+
+User: glow ink sac text should look fluorescent in ULTRAKILL too.
+- Minecraft draws glowing sign text (and its outline) at light 0xF000F0, i.e. ignoring the light
+  around; in a void world all text has that light, so the light value cannot tell glowing text
+  apart. SignTextGlowMixin sets ModelCollector.glowingText from SignText.hasGlowingText() around
+  AbstractSignRenderer.submitSignText; those glyph and outline quads go out flagged
+  MODEL_TEX_BLEND, which ULTRAKILL already draws unlit (Particles/Alpha Blended), so they keep
+  full brightness in the dark. Outline first, text after in the same submesh (index order).
+
+User confirmed: glowing sign text stays bright in the dark.

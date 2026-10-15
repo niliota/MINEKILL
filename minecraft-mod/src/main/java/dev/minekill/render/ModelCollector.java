@@ -530,10 +530,17 @@ public final class ModelCollector implements SubmitNodeCollector {
                 } else {
                     q.rgba |= 0xFF000000;
                     if (textLift != 0) lift(q, textLift);
+                    if (glowingText) q.tex |= Protocol.MODEL_TEX_BLEND;
                 }
             }
         }
     };
+    /**
+     * Set by SignTextGlowMixin while a sign side with glowing text is submitted (render thread).
+     * Its glyphs and outline go out flagged MODEL_TEX_BLEND: ULTRAKILL draws them unlit, at full
+     * brightness whatever the light around, as Minecraft draws glowing text.
+     */
+    public static volatile boolean glowingText;
     private final Matrix4f textPose = new Matrix4f();
     private int textLight;
     private float textBright, textLift;
