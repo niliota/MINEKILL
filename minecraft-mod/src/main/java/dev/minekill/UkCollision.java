@@ -280,6 +280,16 @@ public final class UkCollision {
         return false;
     }
 
+    /**
+     * Block support (signs and the like): does ULTRAKILL geometry fill a good part of cell p?
+     * Any box reaching into the cell shrunk by 0.1 on every side counts: a wall or floor whose
+     * surface is not on the block grid still holds what is placed against it.
+     */
+    public static boolean supports(net.minecraft.core.BlockPos p) {
+        return hasShapes() && intersectsAny(new AABB(p.getX() + 0.1, p.getY() + 0.1, p.getZ() + 0.1,
+                                                     p.getX() + 0.9, p.getY() + 0.9, p.getZ() + 0.9));
+    }
+
     public static boolean hasShapes() {
         return current.boxes.length > 0;
     }

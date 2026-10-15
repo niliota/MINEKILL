@@ -262,6 +262,7 @@ TABLES = [
         ("v","f32", ""),
         ("rgba","u32", "tint, r in the low byte"),
         ("tex","u32", "GUI_TEX_* key"),
+        ("group","u32", "which model the quad belongs to (one entity, block entity, crack): ULTRAKILL draws each group as its own object, lit by the lights around it"),
      ]),
     ("PARTICLES", "Minecraft -> ULTRAKILL",
      "Minecraft's live quad particles (block debris, crits, smoke, ...), interpolated, for ULTRAKILL to draw as billboards", 2048, [

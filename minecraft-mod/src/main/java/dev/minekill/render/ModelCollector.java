@@ -621,7 +621,6 @@ public final class ModelCollector implements SubmitNodeCollector {
     @Override public void submitFlame(PoseStack p, net.minecraft.client.renderer.entity.state.EntityRenderState s, org.joml.Quaternionf q) {}
     @Override public void submitLeash(PoseStack p, net.minecraft.client.renderer.entity.state.EntityRenderState.LeashState s) {}
     @Override public <S> void submitCrumblingOverlay(Model<? super S> model, S s, PoseStack p, RenderType t, int a, int b, int c, net.minecraft.client.renderer.feature.ModelFeatureRenderer.CrumblingOverlay o) {}
-    @Override public void submitMovingBlock(PoseStack p, net.minecraft.client.renderer.block.MovingBlockRenderState s, int i) {}
     /** Whole block models (falling blocks, TNT, minecart contents, held blocks of endermen). */
     @Override
     public void submitBlockModel(PoseStack poseStack, RenderType t, java.util.List<net.minecraft.client.renderer.block.dispatch.BlockStateModelPart> parts,
@@ -659,6 +658,28 @@ public final class ModelCollector implements SubmitNodeCollector {
             }
         }
     }
+    /**
+     * Falling blocks (sand, gravel, anvils, concrete powder) and blocks pushed by pistons. The
+     * block's model parts (picked with the block's own seed, as MovingBlockFeatureRenderer does)
+     * go through submitBlockModel, the path primed TNT already takes: plain quads, lit by
+     * ULTRAKILL. Deliberately no ModelBlockRenderer here (its lighter keeps thread-local state).
+     */
+    @Override
+    public void submitMovingBlock(PoseStack poseStack, net.minecraft.client.renderer.block.MovingBlockRenderState s, int outline) {
+        try {
+            var model = Minecraft.getInstance().getModelManager().getBlockStateModelSet().get(s.blockState);
+            List<net.minecraft.client.renderer.block.dispatch.BlockStateModelPart> parts = new ArrayList<>();
+            model.collectParts(net.minecraft.util.RandomSource.create(s.blockState.getSeed(s.randomSeedPos)), parts);
+            submitBlockModel(poseStack, null, parts, null, 0xF000F0, 0, outline);
+        } catch (RuntimeException e) {
+            if (!movingFailureLogged) {
+                movingFailureLogged = true;
+                LoggerFactory.getLogger("minekill").warn("[MINEKILL] model: moving block failed: {}", e.toString());
+            }
+        }
+    }
+
+    private static boolean movingFailureLogged;
     @Override public void submitBreakingBlockModel(PoseStack p, java.util.List<net.minecraft.client.renderer.block.dispatch.BlockStateModelPart> parts, int i, boolean b) {}
     @Override public void submitShapeOutline(PoseStack p, net.minecraft.world.phys.shapes.VoxelShape s, RenderType t, int i, float f, boolean b) {}
     @Override public void submitCustomGeometry(PoseStack p, RenderType t, SubmitNodeCollector.CustomGeometryRenderer r) {}

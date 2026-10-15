@@ -4,9 +4,9 @@ package dev.minekill.bridge;
 
 public final class Protocol {
     public static final int MAGIC = 0x55544C52;
-    public static final int VERSION = 2091326150;   // layout fingerprint
+    public static final int VERSION = 1650764935;   // layout fingerprint
     public static final int HEADER_SIZE = 56;
-    public static final int TOTAL_SIZE = 3442224;
+    public static final int TOTAL_SIZE = 3704368;
     public static final int SEQ_SIZE = 4;
 
     public static final int FLAG_UK_MOVEMENT = 1;
@@ -403,13 +403,13 @@ public final class Protocol {
     public static final int TBL_HAND_REC_OFF_RGBA = 20;  // colour with lighting applied, r in the low byte
     public static final int TBL_HAND_REC_OFF_TEX = 24;  // GUI_TEX_* key
     public static final int TBL_WORLD_MODELS_OFFSET = 1525264;  // Minecraft -> ULTRAKILL: posed model geometry in the world this frame (entities, block entities, the player in third person, block-breaking cracks), unlit, in Minecraft block coords
-    public static final int TBL_WORLD_MODELS_SIZE = 1835024;
+    public static final int TBL_WORLD_MODELS_SIZE = 2097168;
     public static final int TBL_WORLD_MODELS_CAPACITY = 65536;
     public static final int TBL_WORLD_MODELS_OFF_SEQ = 0;  // seqlock, odd while writing
     public static final int TBL_WORLD_MODELS_OFF_TICKTIMESTAMP = 4;  // epoch ms of the frame
     public static final int TBL_WORLD_MODELS_OFF_COUNT = 12;  // valid vertices; 4 per quad, counter-clockwise front as in Minecraft
     public static final int TBL_WORLD_MODELS_OFF_RECORDS = 16;
-    public static final int TBL_WORLD_MODELS_RECORD_SIZE = 28;
+    public static final int TBL_WORLD_MODELS_RECORD_SIZE = 32;
     public static final int TBL_WORLD_MODELS_REC_OFF_X = 0;  // Minecraft block coords
     public static final int TBL_WORLD_MODELS_REC_OFF_Y = 4;
     public static final int TBL_WORLD_MODELS_REC_OFF_Z = 8;
@@ -417,7 +417,8 @@ public final class Protocol {
     public static final int TBL_WORLD_MODELS_REC_OFF_V = 16;
     public static final int TBL_WORLD_MODELS_REC_OFF_RGBA = 20;  // tint, r in the low byte
     public static final int TBL_WORLD_MODELS_REC_OFF_TEX = 24;  // GUI_TEX_* key
-    public static final int TBL_PARTICLES_OFFSET = 3360288;  // Minecraft -> ULTRAKILL: Minecraft's live quad particles (block debris, crits, smoke, ...), interpolated, for ULTRAKILL to draw as billboards
+    public static final int TBL_WORLD_MODELS_REC_OFF_GROUP = 28;  // which model the quad belongs to (one entity, block entity, crack): ULTRAKILL draws each group as its own object, lit by the lights around it
+    public static final int TBL_PARTICLES_OFFSET = 3622432;  // Minecraft -> ULTRAKILL: Minecraft's live quad particles (block debris, crits, smoke, ...), interpolated, for ULTRAKILL to draw as billboards
     public static final int TBL_PARTICLES_SIZE = 81936;
     public static final int TBL_PARTICLES_CAPACITY = 2048;
     public static final int TBL_PARTICLES_OFF_SEQ = 0;  // seqlock, odd while writing

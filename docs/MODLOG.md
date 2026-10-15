@@ -2743,3 +2743,61 @@ User: the panel behind name tags still does not render.
   visitor treats translucent effects as the panel: flagged MODEL_TEX_BLEND with the font sheet key.
 
 User confirmed: the name-tag panel renders.
+
+## 2026-10-15 — gravity blocks and signs on ULTRAKILL geometry
+
+User: sand and anvils placed on an ULTRAKILL floor turn into items at once; placed on a ceiling,
+the falling block is invisible and drops as an item on landing. Primed TNT renders. Signs cannot
+be placed on ULTRAKILL geometry.
+- **Falling:** FallingBlock.tick starts the fall when `isFree(state below)`; FallingBlockEntity.tick
+  becomes a block on landing only if `!isFree(state below)`. Both read air over ULTRAKILL floors.
+  FallingBlockMixin redirects the tick's one ServerLevel.getBlockState (the cell below) to stone
+  when UkCollision.blocksCell; FallingBlockEntityMixin redirects isFree to false when the cell
+  below the entity's block position is ULTRAKILL geometry.
+- **Invisible falling block:** FallingBlockRenderer submits `submitMovingBlock`, which
+  ModelCollector ignored (primed TNT uses submitBlockModel). Implemented like
+  MovingBlockFeatureRenderer: ModelBlockRenderer.tesselateBlock (no AO) into quads, colour from
+  the QuadInstance (tint, face shading).
+- **Signs:** standing, wall and ceiling-hanging signs check `isSolid` / `isFaceSturdy` of the
+  supporting block state; wall-hanging signs `canAttachTo`. SignSupportMixin / WallHangingSignMixin
+  also accept ULTRAKILL geometry there (UkCollision.supports: any box reaching into the cell
+  shrunk by 0.1).
+
+User: falling and sign placement fixed, falling blocks render and are shaded correctly; but now
+"every block is full bright", only entities look shaded; asked to revert the rendering change.
+Signs are often placed inside walls.
+- No code path found from this round to section shading: the only rendering change was
+  ModelCollector.submitMovingBlock (its own ModelBlockRenderer; BlockModelLighter's thread-local
+  cache is only used when enableCaching() is called, which nothing here does); WorldMesher and the
+  ULTRAKILL plugin are unchanged since tested builds (the plugin since the first name-tag panel
+  attempt). The block materials are cloned per level from a loaded ULTRAKILL material, so a
+  different level can change how blocks are lit; the earlier session's ULTRAKILL log was
+  overwritten by a restart. Reverted submitMovingBlock as asked (falling blocks invisible again);
+  if blocks stay full bright the cause is elsewhere: compare the `world: ... template` lines.
+- Signs: UkPick places into the cell just off the surface; a surface deep in that cell buried the
+  sign. For sign items, a surface more than half a block into the cell moves the placement one
+  cell out (the blocksCell half-block rule).
+
+User: the full-bright blocks happened once and never again; put the falling rendering back,
+carefully.
+- Likely cause of the one-off, found in BuildCandidates: the solid/translucent block templates
+  were the most common ULTRAKILL/Master variant of their queue in memory when the first level
+  loaded, with no check for lighting. If that variant was unlit (emissive), every block drew full
+  bright for the session, while entities (model template requires VERTEX_LIGHTING) and the
+  falling block (model material) stayed shaded: exactly what was reported. Solid and translucent
+  now prefer a VERTEX_LIGHTING variant (warning if none); unchanged in a normal session (the usual
+  picks are lit). Cutout keeps its old pick (it only lends blend setup and alpha test).
+- Falling blocks back, without ModelBlockRenderer: the model's parts (block seed) through
+  submitBlockModel, the path primed TNT uses; lit by ULTRAKILL like TNT.
+
+User confirmed: falling blocks render. New: moving the mouse sometimes makes chests and mobs
+shift in shading, turn lighter or completely black.
+- Cause: all world models (every entity, block entity, crack) were one mesh, one renderer.
+  Unity gives a vertex-lit object a few lights, picked per object per frame among the lights it
+  considers visible to the camera; turning the camera changed the pick for all models at once.
+  Blocks are one object per section and did not show it.
+- WORLD_MODELS records carry a `group` (new field): WorldModels numbers each entity, block
+  entity, the third-person player and each crack. ULTRAKILL draws each group as its own pooled
+  object (ModelBatch), so each gets the lights around it. Particles are still one object.
+
+User confirmed: model shading no longer shifts with the camera; falling blocks render.
