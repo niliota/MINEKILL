@@ -36,8 +36,7 @@ two games.
 - **First-person hand and held items, F5 third person** with your own skin, and the player
   model in the inventory.
 
-Not done yet: combat balance, the background panel behind name tags, flames on burning mobs, and
-hiding the Minecraft window.
+Not done yet: combat balance, flames on burning mobs, and hiding the Minecraft window.
 
 ---
 

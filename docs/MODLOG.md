@@ -2728,3 +2728,18 @@ paths that climb further and freezes when there are none.
 User confirmed: pathfinding much better (mobs climb steps, come back down, chase across
 heights); sign text and name tags work. The name-tag background panel still does not render
 (open). PathDebug removed.
+
+## 2026-10-15 — name-tag background panel
+
+User: the panel behind name tags still does not render.
+- ULTRAKILL's log had no `blend shader` line: no panel quad ever arrived. Font's
+  PreparedTextBuilder emits the background through `acceptEffect`, drawn with the font provider's
+  WHITE glyph on a font sheet, not with an untextured quad, so the GUI_TEX_NONE test never matched.
+  And that glyph's pixels were never mirrored: SpecialGlyphs bitmaps (generated, not from a font
+  file) were skipped ("glyph bitmap type SpecialGlyphs$1 not mirrored yet" in Minecraft's log), so
+  in ULTRAKILL that patch of the sheet was empty. Underlines and strikethrough (GUI too) used the
+  same empty patch.
+- GuiTextures mirrors SpecialGlyphs (WHITE, MISSING) from the enum constant's image. The text
+  visitor treats translucent effects as the panel: flagged MODEL_TEX_BLEND with the font sheet key.
+
+User confirmed: the name-tag panel renders.
