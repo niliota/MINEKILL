@@ -2670,3 +2670,61 @@ lines; and make the shaded hand a bit darker.
 
 User confirmed: the glint sits flush and smooth everywhere it renders; the darker hand (0.75) is
 preferred.
+
+## 2026-10-15 — mob pathfinding fixes; sign text and name tags
+
+User: Minecraft mobs path badly: they all seem to head for higher ground, and hostile mobs
+sometimes walk away from the player. Also add sign text and name tags.
+- **Path start in the air:** WalkNodeEvaluator.getStart, for a mob not on the ground, scans down
+  for the first non-air block state. Over an ULTRAKILL floor in a void world there is none, so a
+  path planned mid-jump started at the bottom of the world. The scan's lookup (fourth
+  getBlockState in getStart, checked in bytecode) now reports ULTRAKILL geometry as stone.
+- **Solid-cell rule vs Minecraft's rounding:** a grounded mob starts at cell floor(feetY + 0.5),
+  but blocksCell called a cell solid once geometry reached 0.2 into its top. Floors 0.2-0.5 into a
+  cell put the mob's start inside a "solid" cell. The 0.2 had no measured reason. blocksCell now
+  uses the same rounding: a cell is solid when its upper half is filled, or when a surface lies in
+  the lower half of the cell above (that cell's floor, however thin). getFloorLevel takes surfaces
+  in (y - 0.5, y + 0.5]. FlowingFluidMixin uses blocksCell too: water on ULTRAKILL floors follows
+  the same rule.
+- **Wander targets on wall tops:** LandRandomPos lifts a random target out of solid ground; a
+  target inside a tall ULTRAKILL wall was lifted to its unreachable top. LandRandomPosMixin drops
+  targets lifted through more than 2 cells of ULTRAKILL geometry.
+- **Temporary diagnostic:** PathDebug logs mobs within 24 blocks every 2 s (position, on ground,
+  target, path end, reachable), capped at 400 lines.
+- **Sign text and name tags:** ModelCollector implemented submitText and submitNameTag like
+  TextFeatureRenderer / SubmitNodeCollection: Font.prepareText glyph quads (prepare8xTextOutline
+  first for glowing text, the text lifted 0.0005 off it) on the font sheets GuiTextures mirrors
+  (key from the glyph's texture view). Full vertex alpha for the alpha-tested material; the
+  translucent name-tag background panel is dropped. Name tags as Minecraft places them (0.5 above
+  the attachment, camera-facing, 0.025 per font pixel); WorldModels now passes the real camera
+  orientation for entities. Not reproduced: the see-through name tag behind walls.
+
+User: sign text and name tags work (a background panel would be nice but is optional); pathing is
+better, but mobs cannot climb small steps, only flat ground; asked why water was changed. Noted:
+ULTRAKILL blood splatters land on Minecraft blocks (BlockColliders are on the Environment layer).
+- **Steps:** my getFloorLevel range change caused it. tryJumpOn checks the mob's body over its own
+  column at `getFloorLevel(column, y + 1)`, expecting the surface it stands on; with
+  `(y - 0.5, y + 0.5]` a floor low in the cell fell out of range, the floor read as y, the body box
+  hit the real floor and every such step was refused. Back to `(y - 1, y + 0.5]`.
+- **Water:** not meant to change; it shared blocksCell. FlowingFluidMixin now uses
+  blocksCellForFluid, the exact old rule.
+- **Name-tag panel:** the background quad (font background, alpha from Minecraft's text
+  background opacity) goes out flagged MODEL_TEX_BLEND (new constant), pushed 0.01 away from the
+  camera; ULTRAKILL draws it with its loaded "Particles/Alpha Blended" shader (vertex alpha,
+  unlit, no depth write; logged as `world: blend shader ...`).
+
+User: better, but once a mob gets onto higher ground it never comes back down; it only finds
+paths that climb further and freezes when there are none.
+- PathDebug had too few chasing mobs to show it; found in the code. GroundPathNavigation
+  .findSurfacePosition moves every ground mob's path target (chase, wander, moveTo) onto the
+  surface: down through air to a block, else up through air, then out of solid, by block states
+  only. Over ULTRAKILL floors in a void world the down scan finds nothing and the up scan ends at
+  the build limit, so every target was the top of the world: mobs climbed what they could and
+  froze. Very likely also the earlier "higher ground" and "hostiles walk away" reports.
+- GroundPathNavigationMixin replaces it while ULTRAKILL boxes exist: the same walk with
+  UkCollision.blocksCell counted as not-air and as solid; when nothing is found below, the target
+  stays where it is instead of going up.
+
+User confirmed: pathfinding much better (mobs climb steps, come back down, chase across
+heights); sign text and name tags work. The name-tag background panel still does not render
+(open). PathDebug removed.

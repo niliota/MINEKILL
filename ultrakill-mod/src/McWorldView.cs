@@ -585,6 +585,7 @@ namespace Minekill
                 bool multiply = (key & Protocol.MODEL_TEX_MULTIPLY) != 0;
                 if (multiply && _multiplyShader == null) continue;
                 if ((key & Protocol.MODEL_TEX_GLINT) != 0 && GlintMaterial(key) == null) continue;
+                if ((key & Protocol.MODEL_TEX_BLEND) != 0 && BlendMaterial(key) == null) continue;
                 if (!_mtris.TryGetValue(key, out List<int> tris)) _mtris[key] = tris = new List<int>();
                 if (tris.Count == 0) _mkeys.Add(key);
                 int b = _mv.Count;
@@ -723,9 +724,37 @@ namespace Minekill
             return m;
         }
 
+        private Shader _blendShader;
+        private bool _blendSearched;
+
+        /// <summary>
+        /// MODEL_TEX_BLEND quads (the translucent panel behind name tags): ULTRAKILL's alpha-blended
+        /// particle shader, which takes the vertex alpha; unlit, no depth write. Null if missing.
+        /// </summary>
+        private Material BlendMaterial(int key)
+        {
+            if (!_blendSearched)
+            {
+                _blendSearched = true;
+                var all = Resources.FindObjectsOfTypeAll<Shader>();
+                _blendShader = all.FirstOrDefault(x => x != null && x.name == "Legacy Shaders/Particles/Alpha Blended")
+                            ?? all.FirstOrDefault(x => x != null && x.name.EndsWith("Particles/Alpha Blended"));
+                _log.LogInfo($"world: blend shader {(_blendShader != null ? _blendShader.name : "MISSING (name tag panels not drawn)")}");
+            }
+            if (_blendShader == null) return null;
+            if (_modelMats.TryGetValue(key, out Material m) && m != null) return m;
+            m = new Material(_blendShader) { hideFlags = HideFlags.HideAndDontSave, name = $"MINEKILL.Blend{key & 0xFFFFFF}" };
+            m.mainTexture = GuiTexture(key & 0xFFFFFF);
+            // 2 * vertex colour * tint * texture: a half tint leaves the vertex colour as is.
+            if (m.HasProperty("_TintColor")) m.SetColor("_TintColor", new Color(0.5f, 0.5f, 0.5f, 0.5f));
+            _modelMats[key] = m;
+            return m;
+        }
+
         private Material ModelMaterial(int key)
         {
             if ((key & Protocol.MODEL_TEX_GLINT) != 0) return GlintMaterial(key);
+            if ((key & Protocol.MODEL_TEX_BLEND) != 0) return BlendMaterial(key);
             if ((key & Protocol.MODEL_TEX_MULTIPLY) != 0)
             {
                 // Block-breaking cracks: Minecraft multiplies them into the block (white, nearly

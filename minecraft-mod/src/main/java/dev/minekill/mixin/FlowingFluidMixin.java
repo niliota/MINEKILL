@@ -24,13 +24,13 @@ public abstract class FlowingFluidMixin {
     @Inject(method = "canPassThroughWall", at = @At("RETURN"), cancellable = true)
     private static void minekill$wall(Direction direction, BlockGetter level, BlockPos sourcePos, BlockState sourceState,
                                         BlockPos targetPos, BlockState targetState, CallbackInfoReturnable<Boolean> cir) {
-        if (cir.getReturnValue() && UkCollision.hasShapes() && UkCollision.blocksCell(targetPos.getX(), targetPos.getY(), targetPos.getZ()))
+        if (cir.getReturnValue() && UkCollision.hasShapes() && UkCollision.blocksCellForFluid(targetPos.getX(), targetPos.getY(), targetPos.getZ()))
             cir.setReturnValue(false);
     }
 
     @Inject(method = "canHoldSpecificFluid", at = @At("RETURN"), cancellable = true)
     private static void minekill$hold(BlockGetter level, BlockPos pos, BlockState state, Fluid fluid, CallbackInfoReturnable<Boolean> cir) {
-        if (cir.getReturnValue() && UkCollision.hasShapes() && UkCollision.blocksCell(pos.getX(), pos.getY(), pos.getZ()))
+        if (cir.getReturnValue() && UkCollision.hasShapes() && UkCollision.blocksCellForFluid(pos.getX(), pos.getY(), pos.getZ()))
             cir.setReturnValue(false);
     }
 }

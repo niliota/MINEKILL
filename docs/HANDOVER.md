@@ -48,7 +48,7 @@ ULTRAKILL; no images cross.
 
 - **Combat balance:** combat is built (proxies, shields, armour, death/restart); Minecraft hits
   currently kill small ULTRAKILL enemies in one blow (1:1 damage). Tune with the owner.
-- Missing visuals: sign text, name tags, burning-entity flames, unifont glyphs (rare characters),
+- Missing visuals: name-tag background panel, burning-entity flames, unifont glyphs (rare characters),
   GUI scissoring (long lists), interpolated animation frames.
 - Native Windows: path and file-sharing support is in (`Platform.cs`, `Bridge.defaultPath`), never
   run.
@@ -95,7 +95,8 @@ minecraft-mod/src/main/java/dev/minekill/   Fabric mod (Java 25)
 Mixins, by purpose:
 - input and focus: `MinecraftMixin`, `MouseHandlerMixin`, `WindowMixin`
 - collision: `EntityCollisionMixin`, `PlayerEdgeMixin`, `EntityPickMixin`
-- pathfinding: `PathContextMixin`, `WalkNodeEvaluatorMixin`, `PathNavigationMixin`, `GoalUtilsMixin`
+- pathfinding: `PathContextMixin`, `WalkNodeEvaluatorMixin`, `PathNavigationMixin`, `GroundPathNavigationMixin`,
+  `GoalUtilsMixin`, `LandRandomPosMixin`
 - fluids, projectiles, aiming: `FlowingFluidMixin`, `AbstractArrowMixin`, `ProjectileUtilMixin`,
   `ProjectileMixin`, `ItemMixin`
 - capture: `GuiRendererMixin`, `FontTextureMixin`, `PictureInPictureRendererMixin`,

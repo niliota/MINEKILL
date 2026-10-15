@@ -297,6 +297,7 @@ public final class Protocol {
     public static final int GUI_TEX_BLOCKS = 2;  // block atlas
     public static final int GUI_TEX_ITEMS = 3;  // item atlas
     public static final int MODEL_TEX_MULTIPLY = 16777216;  // WORLD_MODELS tex flag: multiply-blend decal (block-breaking cracks: Minecraft blends them as dst * src * 2)
+    public static final int MODEL_TEX_BLEND = 67108864;  // WORLD_MODELS tex flag: alpha-blended, unlit (the translucent panel behind name tags)
     public static final int MODEL_TEX_GLINT = 33554432;  // WORLD_MODELS/HAND/GUI tex flag: enchantment glint overlay, drawn additively over the quad before it
     public static final int GUI_TEX_DYNAMIC_BASE = 16;  // first key of textures mirrored through STREAM_MSG_TEXTURE (font sheets)
     public static final int STREAM_ATLAS_BLOCKS = 0;

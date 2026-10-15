@@ -104,6 +104,8 @@ public final class WorldModels {
         float pt = mc.getDeltaTracker().getGameTimeDeltaPartialTick(true);
         var dispatcher = mc.getEntityRenderDispatcher();
         var camera = new CameraRenderState();
+        // Name tags turn to face the camera with this (ULTRAKILL's camera follows Minecraft's).
+        camera.orientation.set(mc.gameRenderer.mainCamera().rotation());
         collector.begin(new Matrix4f(), NONE, NONE, false);
         for (var e : mc.level.entitiesForRendering()) {
             if (e == mc.player || e.distanceToSqr(mc.player) > RANGE * RANGE) continue;
