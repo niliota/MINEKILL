@@ -74,15 +74,29 @@ namespace Minekill
         private int _sectionsReceived;
 
         // Minecraft's block particles (PARTICLES table), camera-facing quads in world space.
-        private GameObject _models;
-        private Mesh _modelMesh;
+        private GameObject _models;   // parent of the per-model objects
+        /// <summary>
+        /// One object per model (WORLD_MODELS group: an entity, a block entity, a crack), pooled.
+        /// Unity gives a vertex-lit object only a few lights, chosen per object and per frame among
+        /// the lights it considers visible: with all models in one big mesh, turning the camera
+        /// changed that choice for every model at once, so chests and mobs brightened, shifted or
+        /// went black (2026-10-15). Separate objects each get the lights around them.
+        /// </summary>
+        private sealed class ModelBatch
+        {
+            public GameObject Go;
+            public Mesh Mesh;
+            public readonly List<Vector3> V = new List<Vector3>();
+            public readonly List<Vector2> Uv = new List<Vector2>();
+            public readonly List<Color32> C = new List<Color32>();
+            public readonly List<int> Keys = new List<int>();
+            public readonly Dictionary<int, List<int>> Tris = new Dictionary<int, List<int>>();
+            public void Clear() { V.Clear(); Uv.Clear(); C.Clear(); Keys.Clear(); foreach (var l in Tris.Values) l.Clear(); }
+        }
+        private readonly List<ModelBatch> _batches = new List<ModelBatch>();
+        private readonly Dictionary<int, ModelBatch> _batchByGroup = new Dictionary<int, ModelBatch>();
         private readonly byte[] _modelBytes = new byte[Protocol.TBL_WORLD_MODELS_OFF_RECORDS + Protocol.TBL_WORLD_MODELS_CAPACITY * Protocol.TBL_WORLD_MODELS_RECORD_SIZE];
         private readonly Dictionary<int, Material> _modelMats = new Dictionary<int, Material>();
-        private readonly List<Vector3> _mv = new List<Vector3>();
-        private readonly List<Vector2> _muv = new List<Vector2>();
-        private readonly List<Color32> _mc = new List<Color32>();
-        private readonly List<int> _mkeys = new List<int>();
-        private readonly Dictionary<int, List<int>> _mtris = new Dictionary<int, List<int>>();
         private readonly List<Material> _mmats = new List<Material>();
         private GameObject _particles;
         private Mesh _particleMesh;
@@ -551,9 +565,10 @@ namespace Minekill
 
         /// <summary>
         /// Minecraft's world models (the player's body in third person, block-breaking cracks):
-        /// quads in Minecraft block coords, so the mesh sits under the root like the sections,
-        /// with the sections' triangle order. One submesh per texture, each with a clone of the
-        /// blocks' vertex-lit cutout material, so ULTRAKILL's lights shade them like the blocks.
+        /// quads in Minecraft block coords, under the root like the sections, with the sections'
+        /// triangle order. One object per model (ModelBatch), one submesh per texture, each with a
+        /// clone of the blocks' vertex-lit cutout material, so ULTRAKILL's lights shade them like
+        /// the blocks.
         /// </summary>
         private void UpdateModels()
         {
@@ -563,20 +578,15 @@ namespace Minekill
                 n = 0;
             if (_models == null)
             {
-                _modelMesh = new Mesh { name = "MINEKILL.WorldModels", hideFlags = HideFlags.HideAndDontSave };
-                _modelMesh.MarkDynamic();
                 _models = new GameObject("MINEKILL.WorldModels") { hideFlags = HideFlags.HideAndDontSave, layer = RenderLayer };
                 _models.transform.SetParent(_root.transform, false);
-                _models.AddComponent<MeshFilter>().sharedMesh = _modelMesh;
-                var r = _models.AddComponent<MeshRenderer>();
-                r.shadowCastingMode = ShadowCastingMode.Off;
-                r.receiveShadows = false;
             }
             if (n == 0) { if (_models.activeSelf) _models.SetActive(false); return; }
 
             EnsureMultiplyShader();
-            _mv.Clear(); _muv.Clear(); _mc.Clear(); _mkeys.Clear();
-            foreach (var l in _mtris.Values) l.Clear();
+            foreach (var bt in _batches) bt.Clear();
+            _batchByGroup.Clear();
+            int used = 0;
             int r0 = Protocol.TBL_WORLD_MODELS_OFF_RECORDS, rs = Protocol.TBL_WORLD_MODELS_RECORD_SIZE;
             for (int q = 0; q + 3 < n; q += 4)
             {
@@ -586,44 +596,70 @@ namespace Minekill
                 if (multiply && _multiplyShader == null) continue;
                 if ((key & Protocol.MODEL_TEX_GLINT) != 0 && GlintMaterial(key) == null) continue;
                 if ((key & Protocol.MODEL_TEX_BLEND) != 0 && BlendMaterial(key) == null) continue;
-                if (!_mtris.TryGetValue(key, out List<int> tris)) _mtris[key] = tris = new List<int>();
-                if (tris.Count == 0) _mkeys.Add(key);
-                int b = _mv.Count;
+                int group = BitConverter.ToInt32(_modelBytes, r0 + q * rs + Protocol.TBL_WORLD_MODELS_REC_OFF_GROUP);
+                if (!_batchByGroup.TryGetValue(group, out ModelBatch batch))
+                {
+                    if (used == _batches.Count) _batches.Add(NewBatch(used));
+                    batch = _batches[used++];
+                    _batchByGroup[group] = batch;
+                }
+                if (!batch.Tris.TryGetValue(key, out List<int> tris)) batch.Tris[key] = tris = new List<int>();
+                if (tris.Count == 0) batch.Keys.Add(key);
+                int b = batch.V.Count;
                 for (int k = 0; k < 4; k++)
                 {
                     int o = r0 + (q + k) * rs;
-                    _mv.Add(new Vector3(BitConverter.ToSingle(_modelBytes, o + Protocol.TBL_WORLD_MODELS_REC_OFF_X),
-                                        BitConverter.ToSingle(_modelBytes, o + Protocol.TBL_WORLD_MODELS_REC_OFF_Y),
-                                        BitConverter.ToSingle(_modelBytes, o + Protocol.TBL_WORLD_MODELS_REC_OFF_Z)));
-                    _muv.Add(new Vector2(BitConverter.ToSingle(_modelBytes, o + Protocol.TBL_WORLD_MODELS_REC_OFF_U),
-                                         BitConverter.ToSingle(_modelBytes, o + Protocol.TBL_WORLD_MODELS_REC_OFF_V)));
+                    batch.V.Add(new Vector3(BitConverter.ToSingle(_modelBytes, o + Protocol.TBL_WORLD_MODELS_REC_OFF_X),
+                                            BitConverter.ToSingle(_modelBytes, o + Protocol.TBL_WORLD_MODELS_REC_OFF_Y),
+                                            BitConverter.ToSingle(_modelBytes, o + Protocol.TBL_WORLD_MODELS_REC_OFF_Z)));
+                    batch.Uv.Add(new Vector2(BitConverter.ToSingle(_modelBytes, o + Protocol.TBL_WORLD_MODELS_REC_OFF_U),
+                                             BitConverter.ToSingle(_modelBytes, o + Protocol.TBL_WORLD_MODELS_REC_OFF_V)));
                     int c = o + Protocol.TBL_WORLD_MODELS_REC_OFF_RGBA;
                     // Multiply (Double) computes 2 * tex * colour, then blends 2 * dst * that; a
                     // half-grey vertex colour makes it exactly Minecraft's crack blend, dst * tex * 2.
-                    _mc.Add(multiply ? (_multiplyDouble ? new Color32(128, 128, 128, 255) : new Color32(255, 255, 255, 255))
-                                     : new Color32(_modelBytes[c], _modelBytes[c + 1], _modelBytes[c + 2], _modelBytes[c + 3]));
+                    batch.C.Add(multiply ? (_multiplyDouble ? new Color32(128, 128, 128, 255) : new Color32(255, 255, 255, 255))
+                                         : new Color32(_modelBytes[c], _modelBytes[c + 1], _modelBytes[c + 2], _modelBytes[c + 3]));
                 }
                 tris.Add(b); tris.Add(b + 1); tris.Add(b + 2);
                 tris.Add(b); tris.Add(b + 2); tris.Add(b + 3);
             }
-            if (_mkeys.Count == 0) { if (_models.activeSelf) _models.SetActive(false); return; }
 
-            _modelMesh.Clear();
-            if (_mv.Count > 65535) _modelMesh.indexFormat = IndexFormat.UInt32;
-            _modelMesh.SetVertices(_mv);
-            _modelMesh.SetUVs(0, _muv);
-            _modelMesh.SetColors(_mc);
-            _modelMesh.subMeshCount = _mkeys.Count;
-            _mmats.Clear();
-            for (int i = 0; i < _mkeys.Count; i++)
+            for (int i = 0; i < _batches.Count; i++)
             {
-                _modelMesh.SetTriangles(_mtris[_mkeys[i]], i);
-                _mmats.Add(ModelMaterial(_mkeys[i]));
+                ModelBatch bt = _batches[i];
+                if (i >= used || bt.Keys.Count == 0) { if (bt.Go.activeSelf) bt.Go.SetActive(false); continue; }
+                Mesh mesh = bt.Mesh;
+                mesh.Clear();
+                mesh.indexFormat = bt.V.Count > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16;
+                mesh.SetVertices(bt.V);
+                mesh.SetUVs(0, bt.Uv);
+                mesh.SetColors(bt.C);
+                mesh.subMeshCount = bt.Keys.Count;
+                _mmats.Clear();
+                for (int k = 0; k < bt.Keys.Count; k++)
+                {
+                    mesh.SetTriangles(bt.Tris[bt.Keys[k]], k);
+                    _mmats.Add(ModelMaterial(bt.Keys[k]));
+                }
+                mesh.RecalculateNormals();
+                mesh.RecalculateBounds();
+                bt.Go.GetComponent<MeshRenderer>().sharedMaterials = _mmats.ToArray();
+                if (!bt.Go.activeSelf) bt.Go.SetActive(true);
             }
-            _modelMesh.RecalculateNormals();
-            _modelMesh.RecalculateBounds();
-            _models.GetComponent<MeshRenderer>().sharedMaterials = _mmats.ToArray();
             if (!_models.activeSelf) _models.SetActive(true);
+        }
+
+        private ModelBatch NewBatch(int index)
+        {
+            var bt = new ModelBatch { Mesh = new Mesh { name = $"MINEKILL.WorldModel{index}", hideFlags = HideFlags.HideAndDontSave } };
+            bt.Mesh.MarkDynamic();
+            bt.Go = new GameObject($"MINEKILL.WorldModel{index}") { hideFlags = HideFlags.HideAndDontSave, layer = RenderLayer };
+            bt.Go.transform.SetParent(_models.transform, false);
+            bt.Go.AddComponent<MeshFilter>().sharedMesh = bt.Mesh;
+            var r = bt.Go.AddComponent<MeshRenderer>();
+            r.shadowCastingMode = ShadowCastingMode.Off;
+            r.receiveShadows = false;
+            return bt;
         }
 
         private Material _modelTemplate;
@@ -844,11 +880,26 @@ namespace Minekill
                 foreach (var g in groups.Take(40))
                     _log.LogInfo($"world:   x{g.Count()} e.g. '{g.First().name}': {g.Key}");
 
-                // Preferred template per layer, by Unity render queue / blend factors.
-                Material Pick(Func<Material, bool> f) =>
+                // Preferred template per layer, by Unity render queue / blend factors; among those,
+                // a vertex-lit one first. Without that, the most common variant in memory won, and
+                // in some sessions that was an unlit (emissive) one: every Minecraft block drew full
+                // bright for the whole session while entities, whose template requires vertex
+                // lighting, stayed shaded (2026-10-15, rare, depended on what was loaded first).
+                bool Lit(Material m) => m.IsKeywordEnabled("VERTEX_LIGHTING");
+                Material PickAny(Func<Material, bool> f) =>
                     groups.Where(g => f(g.First())).Select(g => g.First()).FirstOrDefault();
+                Material Pick(Func<Material, bool> f)
+                {
+                    Material lit = groups.Where(g => f(g.First()) && Lit(g.First())).Select(g => g.First()).FirstOrDefault();
+                    if (lit != null) return lit;
+                    Material any = groups.Where(g => f(g.First())).Select(g => g.First()).FirstOrDefault();
+                    if (any != null) _log.LogWarning($"world: no vertex-lit template matches; '{any.name}' may draw blocks unlit");
+                    return any;
+                }
                 Material opaque = Pick(m => m.renderQueue < 2450 && F(m, "_SrcBlend") == 1 && F(m, "_DstBlend") == 0);
-                Material cutout = Pick(m => m.renderQueue >= 2450 && m.renderQueue < 3000
+                // Cutout: as before (its usual template, an enemy material, is not vertex-lit; it
+                // only lends its blend setup and alpha test, the lit cutout comes from the solid one).
+                Material cutout = PickAny(m => m.renderQueue >= 2450 && m.renderQueue < 3000
                                          || m.shaderKeywords.Any(k => k.Contains("CUTOUT") || k.Contains("ALPHATEST") || k.Contains("CLIP")));
                 Material transparent = Pick(m => m.renderQueue >= 3000 || (F(m, "_SrcBlend") == 5 && F(m, "_DstBlend") == 10));
 

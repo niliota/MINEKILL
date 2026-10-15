@@ -55,6 +55,9 @@ public final class WorldModels {
     private final float[] uv = new float[Protocol.TBL_WORLD_MODELS_CAPACITY * 2];
     private final int[] rgba = new int[Protocol.TBL_WORLD_MODELS_CAPACITY];
     private final int[] tex = new int[Protocol.TBL_WORLD_MODELS_CAPACITY];
+    private final int[] group = new int[Protocol.TBL_WORLD_MODELS_CAPACITY];
+    /** The group of the next model: one per entity, block entity, crack (ULTRAKILL lights each on its own). */
+    private int nextGroup;
     private final List<BlockStateModelPart> parts = new ArrayList<>();
     private int n;
     private boolean playerFailureLogged, crackFailureLogged, wasThirdPerson;
@@ -66,15 +69,16 @@ public final class WorldModels {
 
     public void frame(Minecraft mc, Bridge bridge) {
         n = 0;
+        nextGroup = 0;
         if (mc.player != null && mc.level != null) {
             boolean third = !mc.options.getCameraType().isFirstPerson();
             if (third) player(mc, !wasThirdPerson);
             wasThirdPerson = third;
             entities(mc);
             blockEntities(mc);
-            for (BlockBreakingRenderState s : breaking) crack(mc, s);
+            for (BlockBreakingRenderState s : breaking) { crack(mc, s); nextGroup++; }
         }
-        bridge.writeWorldModelsTable(System.currentTimeMillis(), n, xyz, uv, rgba, tex);
+        bridge.writeWorldModelsTable(System.currentTimeMillis(), n, xyz, uv, rgba, tex, group);
     }
 
     private void player(Minecraft mc, boolean report) {
@@ -91,6 +95,7 @@ public final class WorldModels {
                 collector.report = null;
             }
             for (ModelCollector.Quad q : collector.quads()) put(q.x, q.y, q.z, q.u, q.v, q.rgba, q.tex);
+            nextGroup++;
         } catch (RuntimeException e) {
             if (!playerFailureLogged) {
                 playerFailureLogged = true;
@@ -106,18 +111,19 @@ public final class WorldModels {
         var camera = new CameraRenderState();
         // Name tags turn to face the camera with this (ULTRAKILL's camera follows Minecraft's).
         camera.orientation.set(mc.gameRenderer.mainCamera().rotation());
-        collector.begin(new Matrix4f(), NONE, NONE, false);
         for (var e : mc.level.entitiesForRendering()) {
             if (e == mc.player || e.distanceToSqr(mc.player) > RANGE * RANGE) continue;
             if (dev.minekill.EnemyProxies.isProxyId(e.getId())) continue;   // ULTRAKILL enemies' stand-ins
+            collector.begin(new Matrix4f(), NONE, NONE, false);
             try {
                 var state = dispatcher.extractEntity(e, pt);
                 dispatcher.submit(state, camera, state.x, state.y, state.z, new PoseStack(), collector);
             } catch (RuntimeException ex) {
                 logOnce(e.getClass(), "entity", ex);
             }
+            for (ModelCollector.Quad q : collector.quads()) put(q.x, q.y, q.z, q.u, q.v, q.rgba, q.tex);
+            nextGroup++;
         }
-        for (ModelCollector.Quad q : collector.quads()) put(q.x, q.y, q.z, q.u, q.v, q.rgba, q.tex);
     }
 
     /** Block entities in the chunks around the player, through Minecraft's block entity renderers. */
@@ -126,12 +132,12 @@ public final class WorldModels {
         var dispatcher = mc.getBlockEntityRenderDispatcher();
         var camera = new CameraRenderState();
         int pcx = mc.player.blockPosition().getX() >> 4, pcz = mc.player.blockPosition().getZ() >> 4;
-        collector.begin(new Matrix4f(), NONE, NONE, false);
         for (int cx = pcx - CHUNK_RANGE; cx <= pcx + CHUNK_RANGE; cx++) {
             for (int cz = pcz - CHUNK_RANGE; cz <= pcz + CHUNK_RANGE; cz++) {
                 var chunk = mc.level.getChunkSource().getChunk(cx, cz, false);
                 if (chunk == null) continue;
                 for (var be : chunk.getBlockEntities().values()) {
+                    collector.begin(new Matrix4f(), NONE, NONE, false);
                     try {
                         // Off-screen renderers (beacons) answer only to the "globally rendered" call.
                         var state = dispatcher.tryExtractRenderState(be, pt, null, false);
@@ -144,10 +150,12 @@ public final class WorldModels {
                     } catch (RuntimeException ex) {
                         logOnce(be.getClass(), "block entity", ex);
                     }
+                    if (collector.quads().isEmpty()) continue;
+                    for (ModelCollector.Quad q : collector.quads()) put(q.x, q.y, q.z, q.u, q.v, q.rgba, q.tex);
+                    nextGroup++;
                 }
             }
         }
-        for (ModelCollector.Quad q : collector.quads()) put(q.x, q.y, q.z, q.u, q.v, q.rgba, q.tex);
     }
 
     private void logOnce(Class<?> type, String what, RuntimeException e) {
@@ -254,6 +262,7 @@ public final class WorldModels {
             uv[n * 2] = u[k]; uv[n * 2 + 1] = v[k];
             rgba[n] = color;
             tex[n] = key;
+            group[n] = nextGroup;
         }
     }
 }

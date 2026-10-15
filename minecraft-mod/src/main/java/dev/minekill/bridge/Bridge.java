@@ -614,7 +614,7 @@ public final class Bridge implements AutoCloseable {
     }
 
     /** Write the WORLD_MODELS table under its seqlock; same vertex layout as HAND. */
-    public void writeWorldModelsTable(long ts, int count, float[] xyz, float[] uv, int[] rgba, int[] tex) {
+    public void writeWorldModelsTable(long ts, int count, float[] xyz, float[] uv, int[] rgba, int[] tex, int[] group) {
         if (!connected) return;
         if (count > Protocol.TBL_WORLD_MODELS_CAPACITY) count = Protocol.TBL_WORLD_MODELS_CAPACITY & ~3;
         int b = Protocol.TBL_WORLD_MODELS_OFFSET;
@@ -631,6 +631,7 @@ public final class Bridge implements AutoCloseable {
             buf.putFloat(at + Protocol.TBL_WORLD_MODELS_REC_OFF_V, uv[i * 2 + 1]);
             buf.putInt(at + Protocol.TBL_WORLD_MODELS_REC_OFF_RGBA, rgba[i]);
             buf.putInt(at + Protocol.TBL_WORLD_MODELS_REC_OFF_TEX, tex[i]);
+            buf.putInt(at + Protocol.TBL_WORLD_MODELS_REC_OFF_GROUP, group[i]);
         }
         java.lang.invoke.VarHandle.releaseFence();
         endWrite(b + Protocol.TBL_WORLD_MODELS_OFF_SEQ);

@@ -7,9 +7,9 @@ namespace Minekill.Bridge
     public static class Protocol
     {
         public const uint MAGIC = 0x55544C52u;
-        public const uint VERSION = 2091326150u;   // layout fingerprint
+        public const uint VERSION = 1650764935u;   // layout fingerprint
         public const int HEADER_SIZE = 56;
-        public const int TOTAL_SIZE = 3442224;
+        public const int TOTAL_SIZE = 3704368;
         public const int SEQ_SIZE = 4;
 
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -344,13 +344,13 @@ namespace Minekill.Bridge
         public const int TBL_HAND_REC_OFF_RGBA = 20;  // colour with lighting applied, r in the low byte
         public const int TBL_HAND_REC_OFF_TEX = 24;  // GUI_TEX_* key
         public const int TBL_WORLD_MODELS_OFFSET = 1525264;  // Minecraft -> ULTRAKILL: posed model geometry in the world this frame (entities, block entities, the player in third person, block-breaking cracks), unlit, in Minecraft block coords
-        public const int TBL_WORLD_MODELS_SIZE = 1835024;
+        public const int TBL_WORLD_MODELS_SIZE = 2097168;
         public const int TBL_WORLD_MODELS_CAPACITY = 65536;
         public const int TBL_WORLD_MODELS_OFF_SEQ = 0;  // seqlock, odd while writing
         public const int TBL_WORLD_MODELS_OFF_TICKTIMESTAMP = 4;  // epoch ms of the frame
         public const int TBL_WORLD_MODELS_OFF_COUNT = 12;  // valid vertices; 4 per quad, counter-clockwise front as in Minecraft
         public const int TBL_WORLD_MODELS_OFF_RECORDS = 16;
-        public const int TBL_WORLD_MODELS_RECORD_SIZE = 28;
+        public const int TBL_WORLD_MODELS_RECORD_SIZE = 32;
         public const int TBL_WORLD_MODELS_REC_OFF_X = 0;  // Minecraft block coords
         public const int TBL_WORLD_MODELS_REC_OFF_Y = 4;
         public const int TBL_WORLD_MODELS_REC_OFF_Z = 8;
@@ -358,7 +358,8 @@ namespace Minekill.Bridge
         public const int TBL_WORLD_MODELS_REC_OFF_V = 16;
         public const int TBL_WORLD_MODELS_REC_OFF_RGBA = 20;  // tint, r in the low byte
         public const int TBL_WORLD_MODELS_REC_OFF_TEX = 24;  // GUI_TEX_* key
-        public const int TBL_PARTICLES_OFFSET = 3360288;  // Minecraft -> ULTRAKILL: Minecraft's live quad particles (block debris, crits, smoke, ...), interpolated, for ULTRAKILL to draw as billboards
+        public const int TBL_WORLD_MODELS_REC_OFF_GROUP = 28;  // which model the quad belongs to (one entity, block entity, crack): ULTRAKILL draws each group as its own object, lit by the lights around it
+        public const int TBL_PARTICLES_OFFSET = 3622432;  // Minecraft -> ULTRAKILL: Minecraft's live quad particles (block debris, crits, smoke, ...), interpolated, for ULTRAKILL to draw as billboards
         public const int TBL_PARTICLES_SIZE = 81936;
         public const int TBL_PARTICLES_CAPACITY = 2048;
         public const int TBL_PARTICLES_OFF_SEQ = 0;  // seqlock, odd while writing
