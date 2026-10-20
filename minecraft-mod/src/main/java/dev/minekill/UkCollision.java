@@ -36,11 +36,12 @@ public final class UkCollision {
      * {@code big}, checked by every query.
      */
     private record Snapshot(int generation, long tickTimestamp, AABB[] boxes, VoxelShape[] shapes,
-                            java.util.Map<Long, int[]> grid, int[] big) {}
+                            java.util.Map<Long, int[]> grid, int[] big, AABB[] known, boolean guard) {}
 
     private static final int CELL = 8;
     private static final int MAX_CELLS = 64;
-    private static final Snapshot EMPTY = new Snapshot(-1, 0L, new AABB[0], new VoxelShape[0], java.util.Map.of(), new int[0]);
+    private static final Snapshot EMPTY = new Snapshot(-1, 0L, new AABB[0], new VoxelShape[0], java.util.Map.of(), new int[0],
+            new AABB[0], false);
     private static volatile Snapshot current = EMPTY;
 
     private final Bridge.CollisionTable table = new Bridge.CollisionTable();
@@ -74,7 +75,13 @@ public final class UkCollision {
                                 table.boxes[o + 3], table.boxes[o + 4], table.boxes[o + 5]);
             shapes[i] = Shapes.create(boxes[i]);
         }
-        current = index(table.generation, table.tickTimestamp, boxes, shapes);
+        AABB[] known = new AABB[table.knownCount];
+        for (int i = 0; i < known.length; i++) {
+            int o = (n + i) * 6;
+            known[i] = new AABB(table.boxes[o], table.boxes[o + 1], table.boxes[o + 2],
+                                table.boxes[o + 3], table.boxes[o + 4], table.boxes[o + 5]);
+        }
+        current = index(table.generation, table.tickTimestamp, boxes, shapes, known, (table.flags & 1) != 0);
 
         if (table.generation != lastLoggedGeneration || (lastLoggedCount == 0) != (n == 0)) {
             lastLoggedGeneration = table.generation;
@@ -89,7 +96,7 @@ public final class UkCollision {
 
     private static long cellKey(int cx, int cz) { return ((long) cx << 32) ^ (cz & 0xFFFFFFFFL); }
 
-    private static Snapshot index(int generation, long ts, AABB[] boxes, VoxelShape[] shapes) {
+    private static Snapshot index(int generation, long ts, AABB[] boxes, VoxelShape[] shapes, AABB[] known, boolean guard) {
         java.util.Map<Long, java.util.List<Integer>> cells = new java.util.HashMap<>();
         java.util.List<Integer> big = new java.util.ArrayList<>();
         for (int i = 0; i < boxes.length; i++) {
@@ -103,7 +110,7 @@ public final class UkCollision {
         }
         java.util.Map<Long, int[]> grid = new java.util.HashMap<>(cells.size() * 2);
         for (var e : cells.entrySet()) grid.put(e.getKey(), e.getValue().stream().mapToInt(Integer::intValue).toArray());
-        return new Snapshot(generation, ts, boxes, shapes, grid, big.stream().mapToInt(Integer::intValue).toArray());
+        return new Snapshot(generation, ts, boxes, shapes, grid, big.stream().mapToInt(Integer::intValue).toArray(), known, guard);
     }
 
     /** One-line state for the periodic log. */
@@ -116,8 +123,8 @@ public final class UkCollision {
         }
         int inj = injections;
         injections = 0;
-        return String.format("collision gen=%d boxes=%d touchingPlayer=%d injectionsSinceLast=%d",
-                s.generation, s.boxes.length, touching, inj);
+        return String.format("collision gen=%d boxes=%d known=%d guard=%b touchingPlayer=%d injectionsSinceLast=%d",
+                s.generation, s.boxes.length, s.known.length, s.guard, touching, inj);
     }
 
     /**
@@ -281,6 +288,34 @@ public final class UkCollision {
     }
 
     /**
+     * The highest top among ULTRAKILL boxes that overlap {@code box} (strictly) and whose top is
+     * at most {@code maxTop}, or NaN. For lifting an entity that sank into a floor.
+     */
+    public static double highestTopInside(AABB box, double maxTop) {
+        Snapshot s = current;
+        double best = Double.NaN;
+        for (int pass = 0; pass < 2; pass++) {
+            if (pass == 0) {
+                for (int i : s.big) best = top(s.boxes[i], box, maxTop, best);
+            } else {
+                int x0 = Math.floorDiv((int) Math.floor(box.minX), CELL), x1 = Math.floorDiv((int) Math.floor(box.maxX), CELL);
+                int z0 = Math.floorDiv((int) Math.floor(box.minZ), CELL), z1 = Math.floorDiv((int) Math.floor(box.maxZ), CELL);
+                for (int cx = x0; cx <= x1; cx++)
+                    for (int cz = z0; cz <= z1; cz++) {
+                        int[] list = s.grid.get(cellKey(cx, cz));
+                        if (list != null) for (int i : list) best = top(s.boxes[i], box, maxTop, best);
+                    }
+            }
+        }
+        return best;
+    }
+
+    private static double top(AABB b, AABB box, double maxTop, double best) {
+        if (!b.intersects(box) || b.maxY > maxTop) return best;
+        return Double.isNaN(best) || b.maxY > best ? b.maxY : best;
+    }
+
+    /**
      * Block support (signs and the like): does ULTRAKILL geometry fill a good part of cell p?
      * Any box reaching into the cell shrunk by 0.1 on every side counts: a wall or floor whose
      * surface is not on the block grid still holds what is placed against it.
@@ -292,5 +327,39 @@ public final class UkCollision {
 
     public static boolean hasShapes() {
         return current.boxes.length > 0;
+    }
+
+    /**
+     * True while ULTRAKILL has a level mapped: entities must then stay inside the known regions
+     * (space where Minecraft has every ULTRAKILL collider). Outside them a floor may exist that
+     * Minecraft has not received yet, so moving there is how things fell through floors.
+     */
+    public static boolean guardActive() {
+        return current.guard;
+    }
+
+    /** Is all of {@code box} inside the known regions (their union)? */
+    public static boolean isKnown(AABB box) {
+        AABB[] known = current.known;
+        for (AABB k : known)
+            if (box.minX >= k.minX && box.maxX <= k.maxX && box.minY >= k.minY && box.maxY <= k.maxY
+                    && box.minZ >= k.minZ && box.maxZ <= k.maxZ) return true;
+        if (known.length < 2) return false;
+        // Spanning several regions: every block cell the box touches must lie in one of them
+        // (regions are whole blocks).
+        int x0 = (int) Math.floor(box.minX), x1 = (int) Math.ceil(box.maxX) - 1;
+        int y0 = (int) Math.floor(box.minY), y1 = (int) Math.ceil(box.maxY) - 1;
+        int z0 = (int) Math.floor(box.minZ), z1 = (int) Math.ceil(box.maxZ) - 1;
+        if ((long) (x1 - x0 + 1) * (y1 - y0 + 1) * (z1 - z0 + 1) > 512) return false;
+        for (int x = x0; x <= x1; x++)
+            for (int y = y0; y <= y1; y++)
+                for (int z = z0; z <= z1; z++) {
+                    boolean in = false;
+                    for (AABB k : known)
+                        if (x >= k.minX && x + 1 <= k.maxX && y >= k.minY && y + 1 <= k.maxY
+                                && z >= k.minZ && z + 1 <= k.maxZ) { in = true; break; }
+                    if (!in) return false;
+                }
+        return true;
     }
 }

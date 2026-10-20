@@ -415,19 +415,28 @@ namespace Minekill.Bridge
         /// even seqlock. <paramref name="boxes"/> is flat minX,minY,minZ,maxX,maxY,maxZ in
         /// Minecraft block coordinates.
         /// </summary>
-        public void WriteCollisionTable(long tickTimestamp, uint generation, float[] boxes, int count)
+        /// <summary>
+        /// Write the COLLISION table: <paramref name="count"/> boxes, then <paramref name="known"/>
+        /// known regions, all as six floats in <paramref name="boxes"/>. <paramref name="guard"/>
+        /// sets flags bit 0 (Minecraft keeps entities out of space outside the known regions).
+        /// </summary>
+        public void WriteCollisionTable(long tickTimestamp, uint generation, float[] boxes, int count,
+                                        int known = 0, bool guard = false)
         {
             if (!Connected) return;
             if (count > Protocol.TBL_COLLISION_CAPACITY) count = Protocol.TBL_COLLISION_CAPACITY;
+            if (count + known > Protocol.TBL_COLLISION_CAPACITY) known = Protocol.TBL_COLLISION_CAPACITY - count;
             int b = Protocol.TBL_COLLISION_OFFSET;
             BeginWrite(b + Protocol.TBL_COLLISION_OFF_SEQ);
             _view.Write(b + Protocol.TBL_COLLISION_OFF_TICKTIMESTAMP, tickTimestamp);
             _view.Write(b + Protocol.TBL_COLLISION_OFF_GENERATION, generation);
             _view.Write(b + Protocol.TBL_COLLISION_OFF_COUNT, (uint)count);
+            _view.Write(b + Protocol.TBL_COLLISION_OFF_KNOWNCOUNT, (uint)known);
+            _view.Write(b + Protocol.TBL_COLLISION_OFF_FLAGS, guard ? 1u : 0u);
             // Records are six contiguous floats with no padding, so one array write
             // lays them down at exactly the generated REC_OFF_* offsets.
-            if (count > 0)
-                _view.WriteArray(b + Protocol.TBL_COLLISION_OFF_RECORDS, boxes, 0, count * 6);
+            if (count + known > 0)
+                _view.WriteArray(b + Protocol.TBL_COLLISION_OFF_RECORDS, boxes, 0, (count + known) * 6);
             EndWrite(b + Protocol.TBL_COLLISION_OFF_SEQ);
         }
 

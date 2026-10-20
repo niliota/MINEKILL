@@ -336,6 +336,8 @@ namespace Minekill
                           $"collisionSkippedRotated={_collision.LastRotated}\n" +
                           $"collisionSkippedOther={_collision.LastOther}\n" +
                           $"collisionOverflow={_collision.LastOverflow}\n" +
+                          $"collisionKnownRegions={_collision.LastKnown}\n" +
+                          $"collisionVerifyFixes={_collision.Voxels.VerifyFixes}\n" +
                           $"collisionSkipped={_collision.LastSkippedSummary}\n" +
                           $"collisionExact={_collision.LastExact}\n" +
                           $"collisionVoxelBoxes={_collision.LastVoxelBoxes}\n" +

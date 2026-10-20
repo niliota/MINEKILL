@@ -156,9 +156,10 @@ final class PlayerPublisher {
 
     /**
      * What the crosshair targets, for ULTRAKILL to draw Minecraft's outline (the world layer has
-     * no other way to show it). A Minecraft block: its outline shape's bounds. ULTRAKILL geometry
-     * (UkPick): the cell a held block would go into, only while holding a block, as SkyCraft
-     * does. Inflated slightly, like Minecraft's own outline, so it does not z-fight the faces.
+     * no other way to show it). A Minecraft block: its outline shape's bounds, inflated slightly,
+     * like Minecraft's own outline, so it does not z-fight the faces. ULTRAKILL geometry (UkPick):
+     * nothing. The placement-cell preview (kind 2, after SkyCraft) was removed on 2026-10-20:
+     * vanilla has no such preview.
      */
     private void publishSelection(Minecraft mc, LocalPlayer p) {
         var hit = mc.hitResult;
@@ -166,14 +167,7 @@ final class PlayerPublisher {
         net.minecraft.world.phys.AABB box = null;
         if (mc.gui.screen() == null && hit instanceof net.minecraft.world.phys.BlockHitResult bh
                 && hit.getType() == net.minecraft.world.phys.HitResult.Type.BLOCK && mc.level != null) {
-            if (bh instanceof UkPick.UltrakillHitResult) {
-                boolean holdingBlock = p.getMainHandItem().getItem() instanceof net.minecraft.world.item.BlockItem
-                        || p.getOffhandItem().getItem() instanceof net.minecraft.world.item.BlockItem;
-                if (holdingBlock) {
-                    kind = 2;
-                    box = new net.minecraft.world.phys.AABB(bh.getBlockPos());
-                }
-            } else {
+            if (!(bh instanceof UkPick.UltrakillHitResult)) {
                 var shape = mc.level.getBlockState(bh.getBlockPos()).getShape(mc.level, bh.getBlockPos());
                 if (!shape.isEmpty()) {
                     kind = 1;

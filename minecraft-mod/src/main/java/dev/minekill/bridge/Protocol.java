@@ -4,9 +4,9 @@ package dev.minekill.bridge;
 
 public final class Protocol {
     public static final int MAGIC = 0x55544C52;
-    public static final int VERSION = 1650764935;   // layout fingerprint
+    public static final int VERSION = 225337553;   // layout fingerprint
     public static final int HEADER_SIZE = 56;
-    public static final int TOTAL_SIZE = 3704368;
+    public static final int TOTAL_SIZE = 3704376;
     public static final int SEQ_SIZE = 4;
 
     public static final int FLAG_UK_MOVEMENT = 1;
@@ -312,13 +312,15 @@ public final class Protocol {
 
     // Tables: one seqlock over a header and a list of fixed-size records.
     public static final int TBL_COLLISION_OFFSET = 12672;  // ULTRAKILL -> Minecraft: ULTRAKILL collision boxes near the player and near the points in COLLISION_INTEREST, already in Minecraft block coords
-    public static final int TBL_COLLISION_SIZE = 393240;
+    public static final int TBL_COLLISION_SIZE = 393248;
     public static final int TBL_COLLISION_CAPACITY = 16384;
     public static final int TBL_COLLISION_OFF_SEQ = 0;  // seqlock, odd while writing
     public static final int TBL_COLLISION_OFF_TICKTIMESTAMP = 4;  // epoch ms when ULTRAKILL sampled the colliders
     public static final int TBL_COLLISION_OFF_GENERATION = 12;  // bumps on every re-anchor; boxes from an older mapping are discarded
-    public static final int TBL_COLLISION_OFF_COUNT = 16;  // valid records, <= capacity
-    public static final int TBL_COLLISION_OFF_RECORDS = 24;
+    public static final int TBL_COLLISION_OFF_COUNT = 16;  // collision boxes: the first `count` records
+    public static final int TBL_COLLISION_OFF_KNOWNCOUNT = 20;  // KNOWN regions: the `knownCount` records after the boxes (count + knownCount <= capacity). Inside them, every ULTRAKILL collider is in this table; outside them nothing is known
+    public static final int TBL_COLLISION_OFF_FLAGS = 24;  // bit 0: a level is mapped, so Minecraft must not move entities into space outside the known regions
+    public static final int TBL_COLLISION_OFF_RECORDS = 32;
     public static final int TBL_COLLISION_RECORD_SIZE = 24;
     public static final int TBL_COLLISION_REC_OFF_MINX = 0;  // Minecraft block coords
     public static final int TBL_COLLISION_REC_OFF_MINY = 4;
@@ -326,7 +328,7 @@ public final class Protocol {
     public static final int TBL_COLLISION_REC_OFF_MAXX = 12;
     public static final int TBL_COLLISION_REC_OFF_MAXY = 16;
     public static final int TBL_COLLISION_REC_OFF_MAXZ = 20;
-    public static final int TBL_COLLISION_INTEREST_OFFSET = 405912;  // Minecraft -> ULTRAKILL: where entities other than the player are (clustered), so ULTRAKILL publishes its collision around them too
+    public static final int TBL_COLLISION_INTEREST_OFFSET = 405920;  // Minecraft -> ULTRAKILL: where entities other than the player are (clustered), so ULTRAKILL publishes its collision around them too
     public static final int TBL_COLLISION_INTEREST_SIZE = 1552;
     public static final int TBL_COLLISION_INTEREST_CAPACITY = 128;
     public static final int TBL_COLLISION_INTEREST_OFF_SEQ = 0;  // seqlock, odd while writing
@@ -337,7 +339,7 @@ public final class Protocol {
     public static final int TBL_COLLISION_INTEREST_REC_OFF_X = 0;  // Minecraft block coords, an entity cluster's centre
     public static final int TBL_COLLISION_INTEREST_REC_OFF_Y = 4;
     public static final int TBL_COLLISION_INTEREST_REC_OFF_Z = 8;
-    public static final int TBL_BLOCK_COLLISION_OFFSET = 407464;  // Minecraft -> ULTRAKILL: Minecraft block collision boxes around the player (merged), for ULTRAKILL to make solid for its enemies and projectiles
+    public static final int TBL_BLOCK_COLLISION_OFFSET = 407472;  // Minecraft -> ULTRAKILL: Minecraft block collision boxes around the player (merged), for ULTRAKILL to make solid for its enemies and projectiles
     public static final int TBL_BLOCK_COLLISION_SIZE = 98320;
     public static final int TBL_BLOCK_COLLISION_CAPACITY = 4096;
     public static final int TBL_BLOCK_COLLISION_OFF_SEQ = 0;  // seqlock, odd while writing
@@ -351,7 +353,7 @@ public final class Protocol {
     public static final int TBL_BLOCK_COLLISION_REC_OFF_MAXX = 12;
     public static final int TBL_BLOCK_COLLISION_REC_OFF_MAXY = 16;
     public static final int TBL_BLOCK_COLLISION_REC_OFF_MAXZ = 20;
-    public static final int TBL_ENEMIES_OFFSET = 505784;  // ULTRAKILL -> Minecraft: live ULTRAKILL enemies near the player, for Minecraft to mirror as invisible proxy entities it can fight
+    public static final int TBL_ENEMIES_OFFSET = 505792;  // ULTRAKILL -> Minecraft: live ULTRAKILL enemies near the player, for Minecraft to mirror as invisible proxy entities it can fight
     public static final int TBL_ENEMIES_SIZE = 3608;
     public static final int TBL_ENEMIES_CAPACITY = 128;
     public static final int TBL_ENEMIES_OFF_SEQ = 0;  // seqlock, odd while writing
@@ -367,7 +369,7 @@ public final class Protocol {
     public static final int TBL_ENEMIES_REC_OFF_WIDTH = 16;  // blocks
     public static final int TBL_ENEMIES_REC_OFF_HEIGHT = 20;  // blocks
     public static final int TBL_ENEMIES_REC_OFF_HEALTH = 24;  // ULTRAKILL health (diagnostics)
-    public static final int TBL_GUI_OFFSET = 509392;  // Minecraft -> ULTRAKILL: every quad Minecraft's GUI draws this frame (HUD, text, items), in draw order, for ULTRAKILL to replay
+    public static final int TBL_GUI_OFFSET = 509400;  // Minecraft -> ULTRAKILL: every quad Minecraft's GUI draws this frame (HUD, text, items), in draw order, for ULTRAKILL to replay
     public static final int TBL_GUI_SIZE = 786472;
     public static final int TBL_GUI_CAPACITY = 32768;
     public static final int TBL_GUI_OFF_SEQ = 0;  // seqlock, odd while writing
@@ -386,7 +388,7 @@ public final class Protocol {
     public static final int TBL_GUI_REC_OFF_V = 12;
     public static final int TBL_GUI_REC_OFF_RGBA = 16;  // colour, r in the low byte
     public static final int TBL_GUI_REC_OFF_TEX = 20;  // GUI_TEX_* key
-    public static final int TBL_HAND_OFFSET = 1295864;  // Minecraft -> ULTRAKILL: Minecraft's first-person hands and held items this frame: posed, lit quads in Minecraft view space (camera looks down -z, y up), far first
+    public static final int TBL_HAND_OFFSET = 1295872;  // Minecraft -> ULTRAKILL: Minecraft's first-person hands and held items this frame: posed, lit quads in Minecraft view space (camera looks down -z, y up), far first
     public static final int TBL_HAND_SIZE = 229400;
     public static final int TBL_HAND_CAPACITY = 8192;
     public static final int TBL_HAND_OFF_SEQ = 0;  // seqlock, odd while writing
@@ -402,7 +404,7 @@ public final class Protocol {
     public static final int TBL_HAND_REC_OFF_V = 16;
     public static final int TBL_HAND_REC_OFF_RGBA = 20;  // colour with lighting applied, r in the low byte
     public static final int TBL_HAND_REC_OFF_TEX = 24;  // GUI_TEX_* key
-    public static final int TBL_WORLD_MODELS_OFFSET = 1525264;  // Minecraft -> ULTRAKILL: posed model geometry in the world this frame (entities, block entities, the player in third person, block-breaking cracks), unlit, in Minecraft block coords
+    public static final int TBL_WORLD_MODELS_OFFSET = 1525272;  // Minecraft -> ULTRAKILL: posed model geometry in the world this frame (entities, block entities, the player in third person, block-breaking cracks), unlit, in Minecraft block coords
     public static final int TBL_WORLD_MODELS_SIZE = 2097168;
     public static final int TBL_WORLD_MODELS_CAPACITY = 65536;
     public static final int TBL_WORLD_MODELS_OFF_SEQ = 0;  // seqlock, odd while writing
@@ -418,7 +420,7 @@ public final class Protocol {
     public static final int TBL_WORLD_MODELS_REC_OFF_RGBA = 20;  // tint, r in the low byte
     public static final int TBL_WORLD_MODELS_REC_OFF_TEX = 24;  // GUI_TEX_* key
     public static final int TBL_WORLD_MODELS_REC_OFF_GROUP = 28;  // which model the quad belongs to (one entity, block entity, crack): ULTRAKILL draws each group as its own object, lit by the lights around it
-    public static final int TBL_PARTICLES_OFFSET = 3622432;  // Minecraft -> ULTRAKILL: Minecraft's live quad particles (block debris, crits, smoke, ...), interpolated, for ULTRAKILL to draw as billboards
+    public static final int TBL_PARTICLES_OFFSET = 3622440;  // Minecraft -> ULTRAKILL: Minecraft's live quad particles (block debris, crits, smoke, ...), interpolated, for ULTRAKILL to draw as billboards
     public static final int TBL_PARTICLES_SIZE = 81936;
     public static final int TBL_PARTICLES_CAPACITY = 2048;
     public static final int TBL_PARTICLES_OFF_SEQ = 0;  // seqlock, odd while writing

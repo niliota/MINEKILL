@@ -109,7 +109,9 @@ public final class PlayerSafety {
             LOG.info("[MINEKILL] safety: movement key pressed, spawn hold released ({} s invulnerable)", FALL_GRACE_MS / 1000);
         }
 
-        // 3. Void net.
+        // 3. Falling through ULTRAKILL floors is handled for every entity by EntitySafety.
+
+        // 4. Void net.
         if (player.getY() < player.level().getMinY() - NET_BELOW_MIN_Y) {
             teleport(mc, player, SPAWN, "void net at y=" + String.format("%.1f", player.getY()));
             spawnHold = true;

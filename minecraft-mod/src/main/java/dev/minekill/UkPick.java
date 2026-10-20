@@ -33,17 +33,6 @@ public final class UkPick {
         }
     }
 
-    private static boolean holdingSign() {
-        var player = net.minecraft.client.Minecraft.getInstance().player;
-        if (player == null) return false;
-        for (var hand : net.minecraft.world.InteractionHand.values()) {
-            // Signs are StandingAndWallBlockItems (as are torches and heads) whose block is a sign.
-            if (player.getItemInHand(hand).getItem() instanceof net.minecraft.world.item.BlockItem bi
-                    && bi.getBlock() instanceof net.minecraft.world.level.block.SignBlock) return true;
-        }
-        return false;
-    }
-
     public static BlockHitResult refine(Vec3 from, Vec3 to, BlockHitResult vanilla) {
         if (!UkCollision.hasShapes()) return vanilla;
         UkCollision.RayHit hit = UkCollision.raycast(from, to);
@@ -59,17 +48,15 @@ public final class UkPick {
         // Step off the surface along its normal, into the empty side.
         BlockPos cell = BlockPos.containing(location.x + face.getStepX() * 1e-4,
                 location.y + face.getStepY() * 1e-4, location.z + face.getStepZ() * 1e-4);
-        // Signs hang on the face of their cell, so a surface reaching deep into that cell buried
-        // them in the wall (2026-10-15). For signs, a surface more than half a block into the
-        // cell moves the placement one cell further out (the half-block rule of blocksCell):
-        // the sign then hangs at most half a block in front of the surface. Other blocks keep
-        // the near cell, where a small overlap with the wall looks better than a gap.
-        if (holdingSign()) {
-            double s = axis.choose(location.x, location.y, location.z);
-            int c = axis.choose(cell.getX(), cell.getY(), cell.getZ());
-            double buried = face.getAxisDirection() == Direction.AxisDirection.POSITIVE ? s - c : c + 1 - s;
-            if (buried > 0.5) cell = cell.relative(face);
-        }
+        // A surface more than half a block into the cell moves the placement one cell further
+        // out (the half-block rule of blocksCell), so whatever is placed overlaps the geometry by
+        // at most half a block instead of being buried in it. Signs first (2026-10-15); since
+        // 2026-10-17 every item: blocks went deep into meshes, and spawn eggs put the mob's feet
+        // at the bottom of a cell the floor filled, so it spawned inside the floor and fell.
+        double s = axis.choose(location.x, location.y, location.z);
+        int c = axis.choose(cell.getX(), cell.getY(), cell.getZ());
+        double buried = face.getAxisDirection() == Direction.AxisDirection.POSITIVE ? s - c : c + 1 - s;
+        if (buried > 0.5) cell = cell.relative(face);
         return new UltrakillHitResult(location, face, cell);
     }
 }

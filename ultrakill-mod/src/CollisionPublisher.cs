@@ -26,7 +26,8 @@ namespace Minekill
     {
         /// <summary>Half-size of the query box around the player, in Minecraft blocks.</summary>
         private const float RadiusBlocks = 10f;
-        private const float IntervalSeconds = 0.1f;
+        /// <summary>Seconds between samples (0.1 until 2026-10-15: new floor reached Minecraft too late).</summary>
+        private const float IntervalSeconds = 0.05f;
         /// <summary>A box counts as axis-aligned if its mapped volume is within this of exact.</summary>
         private const float AxisAlignedTolerance = 0.02f;
 
@@ -39,6 +40,13 @@ namespace Minekill
         private readonly HashSet<int> _hitIds = new HashSet<int>();
         private readonly float[] _interestXyz = new float[Protocol.TBL_COLLISION_INTEREST_CAPACITY * 3];
         private readonly List<Vector3> _interest = new List<Vector3>();
+        /// <summary>Entity clusters plus the player's look-ahead points (see Tick).</summary>
+        private readonly List<Vector3> _interestAll = new List<Vector3>();
+        private Vector3 _lastMcPlayer, _mcVelocity;   // blocks, blocks per second
+        private float _lastMcPlayerTime = -1f;
+        /// <summary>Above this speed (blocks/s) the collision ahead of the player is prepared early.</summary>
+        private const float LookAheadSpeed = 6f;
+        private static readonly float[] LookAheadSeconds = { 0.15f, 0.35f, 0.7f };
         /// <summary>Half-size of the query box around each entity cluster, in Minecraft blocks.</summary>
         private const float InterestRadiusBlocks = 5f;
         private readonly float[] _boxes = new float[Protocol.TBL_COLLISION_CAPACITY * 6];
@@ -47,6 +55,10 @@ namespace Minekill
         private readonly float[] _candidate = new float[MaxCandidates * 6];
         private readonly float[] _lastWritten = new float[Protocol.TBL_COLLISION_CAPACITY * 6];
         private int _lastWrittenCount = -1;
+        private int _lastWrittenKnown = -1;
+        /// <summary>Records kept free in the table for the known regions.</summary>
+        private const int KnownReserve = 256;
+        public int LastKnown { get; private set; }
         private uint _lastWrittenGeneration = uint.MaxValue;
         private readonly Dictionary<int, bool> _exactCache = new Dictionary<int, bool>();
         private uint _exactCacheGeneration = uint.MaxValue;
@@ -62,7 +74,15 @@ namespace Minekill
 
         // Collider tracking, so the voxel cache follows geometry that changes. Per collider:
         // its Minecraft-space bounds when last seen. Reset per mapping generation.
-        private struct Seen { public Vector3 Min, Max; }
+        private struct Seen { public Vector3 Min, Max; public float FirstSeen, LastMoved, LastPresent; }
+        /// <summary>
+        /// A tracked collider absent from the samples for longer than this, then back, has its
+        /// cached blocks probed again. Only colliders in range are reported gone, so a room
+        /// ULTRAKILL switched off and on while the player was away came back unnoticed, and its
+        /// blocks probed while it was off stayed "empty" (2026-10-17 logs: floors "first seen at
+        /// level start, never moved", cached empty, a fresh probe hit).
+        /// </summary>
+        private const float ReentryInvalidateSeconds = 0.5f;
         private readonly Dictionary<int, Seen> _seen = new Dictionary<int, Seen>();
         private readonly HashSet<int> _present = new HashSet<int>();
         private readonly List<int> _gone = new List<int>();
@@ -158,7 +178,25 @@ namespace Minekill
                 for (int i = 0; i < ni; i++)
                     _interest.Add(new Vector3(_interestXyz[i * 3], _interestXyz[i * 3 + 1], _interestXyz[i * 3 + 2]));
             }
-            _voxels.Tick(_envMask, _puppet.UkToMc(body.position + _puppet.UkFeetOffset), _interest);
+            // Look-ahead (2026-10-15): a fast fall outran the collision pipeline. Probing reaches
+            // 8 blocks above and below the player, and the merged boxes are rebuilt a few times a
+            // second, so at 1.5+ blocks per tick a floor below was never published before the
+            // player passed it, and they fell out of the level. When the player moves fast, points
+            // along their path become interest points, probed and published like entity clusters.
+            Vector3 mcNow = _puppet.UkToMc(body.position + _puppet.UkFeetOffset);
+            float now = Time.unscaledTime, dt = now - _lastMcPlayerTime;
+            if (_lastMcPlayerTime >= 0f && dt > 0f && dt < 0.5f)
+                _mcVelocity = Vector3.Lerp(_mcVelocity, (mcNow - _lastMcPlayer) / dt, 0.5f);
+            else
+                _mcVelocity = Vector3.zero;
+            _lastMcPlayer = mcNow;
+            _lastMcPlayerTime = now;
+            _interestAll.Clear();
+            if (_mcVelocity.magnitude > LookAheadSpeed)
+                foreach (float t in LookAheadSeconds) _interestAll.Add(mcNow + _mcVelocity * t);
+            _interestAll.AddRange(_interest);
+            _voxels.Tick(_envMask, mcNow, _interestAll);
+
 
             if (Time.unscaledTime < _next) return;
             _next = Time.unscaledTime + IntervalSeconds;
@@ -219,13 +257,16 @@ namespace Minekill
 
             // Nearest first, so a crowded area keeps the walls that matter.
             int sent = candidates;
-            if (candidates > Protocol.TBL_COLLISION_CAPACITY)
+            int boxRoom = Protocol.TBL_COLLISION_CAPACITY - KnownReserve;
+            float cutoffSq = float.PositiveInfinity;
+            if (candidates > boxRoom)
             {
                 _order.Clear();
                 for (int i = 0; i < candidates; i++)
                     _order.Add(new KeyValuePair<float, int>(DistanceSq(mcPlayer, i), i));
                 _order.Sort((a, b) => a.Key.CompareTo(b.Key));
-                sent = Protocol.TBL_COLLISION_CAPACITY;
+                sent = boxRoom;
+                cutoffSq = _order[sent].Key;
                 for (int j = 0; j < sent; j++)
                     Array.Copy(_candidate, _order[j].Value * 6, _boxes, j * 6, 6);
             }
@@ -234,13 +275,46 @@ namespace Minekill
                 Array.Copy(_candidate, 0, _boxes, 0, candidates * 6);
             }
 
+            // Known regions after the boxes: where Minecraft now has every ULTRAKILL collider, so
+            // it can keep entities out of everywhere else instead of letting them fall through
+            // floors it has not received yet. Boxes dropped for capacity were the farthest, so a
+            // region reaching past the nearest dropped box is left out.
+            int known = 0;
+            if (!_voxels.LastCollectTruncated && candidates < MaxCandidates)
+            {
+                known = _voxels.CollectKnown(mcPlayer, _boxes, sent, KnownReserve);
+                if (cutoffSq < float.PositiveInfinity)
+                {
+                    // Clip each region to the block-aligned cube inside the cutoff sphere (all its
+                    // corners nearer than the nearest dropped box), so a crowded area shrinks the
+                    // known space instead of dropping the player's own region.
+                    float h = Mathf.Sqrt(cutoffSq / 3f) * 0.999f;
+                    float lx = Mathf.Ceil(mcPlayer.x - h), ly = Mathf.Ceil(mcPlayer.y - h), lz = Mathf.Ceil(mcPlayer.z - h);
+                    float ux = Mathf.Floor(mcPlayer.x + h), uy = Mathf.Floor(mcPlayer.y + h), uz = Mathf.Floor(mcPlayer.z + h);
+                    int kept = 0;
+                    for (int i = 0; i < known; i++)
+                    {
+                        int o = (sent + i) * 6, d = (sent + kept) * 6;
+                        float x0 = Mathf.Max(_boxes[o], lx), y0 = Mathf.Max(_boxes[o + 1], ly), z0 = Mathf.Max(_boxes[o + 2], lz);
+                        float x1 = Mathf.Min(_boxes[o + 3], ux), y1 = Mathf.Min(_boxes[o + 4], uy), z1 = Mathf.Min(_boxes[o + 5], uz);
+                        if (x0 >= x1 || y0 >= y1 || z0 >= z1) continue;
+                        _boxes[d] = x0; _boxes[d + 1] = y0; _boxes[d + 2] = z0;
+                        _boxes[d + 3] = x1; _boxes[d + 4] = y1; _boxes[d + 5] = z1;
+                        kept++;
+                    }
+                    known = kept;
+                }
+            }
+            LastKnown = known;
+
             // Only rewrite when something changed: Minecraft rebuilds its shapes on every new
             // table, and the static level gives identical samples most of the time.
-            if (!SameAsLastWritten(sent))
+            if (!SameAsLastWritten(sent, known))
             {
-                _bridge.WriteCollisionTable(NowMs(), _puppet.MappingGeneration, _boxes, sent);
-                Array.Copy(_boxes, _lastWritten, sent * 6);
+                _bridge.WriteCollisionTable(NowMs(), _puppet.MappingGeneration, _boxes, sent, known, true);
+                Array.Copy(_boxes, _lastWritten, (sent + known) * 6);
                 _lastWrittenCount = sent;
+                _lastWrittenKnown = known;
                 _lastWrittenGeneration = _puppet.MappingGeneration;
             }
             LastExact = exactCount;
@@ -292,10 +366,10 @@ namespace Minekill
         /// </summary>
         private int AddInterestHits(int n)
         {
-            if (_interest.Count == 0) return n;
+            if (_interestAll.Count == 0) return n;
             _hitIds.Clear();
             for (int i = 0; i < n; i++) if (_hits[i] != null) _hitIds.Add(_hits[i].GetInstanceID());
-            foreach (Vector3 mc in _interest)
+            foreach (Vector3 mc in _interestAll)
             {
                 _puppet.McBoxToUk(mc - Vector3.one * InterestRadiusBlocks, mc + Vector3.one * InterestRadiusBlocks,
                                   out Vector3 c, out Vector3 half, out Quaternion rot);
@@ -371,18 +445,27 @@ namespace Minekill
                 int id = c.GetInstanceID();
                 _present.Add(id);
                 McBounds(c.bounds, out Vector3 mn, out Vector3 mx);
+                float tNow = Time.unscaledTime;
                 if (!_seen.TryGetValue(id, out Seen old))
                 {
                     // The very first sample of a level only records: nothing it could
                     // invalidate was probed under a different set of colliders.
-                    if (_seenPrimed) _voxels.Invalidate(mn, mx);
+                    if (_seenPrimed) LogInvalidation(c, "appeared", _voxels.Invalidate(mn, mx));
+                    _seen[id] = new Seen { Min = mn, Max = mx, FirstSeen = tNow, LastMoved = -1f, LastPresent = tNow };
                 }
                 else if ((old.Min - mn).sqrMagnitude > 1e-4f || (old.Max - mx).sqrMagnitude > 1e-4f)
                 {
-                    _voxels.Invalidate(old.Min, old.Max);
-                    _voxels.Invalidate(mn, mx);
+                    int k = _voxels.Invalidate(old.Min, old.Max) + _voxels.Invalidate(mn, mx);
+                    LogInvalidation(c, $"moved by ({(mn - old.Min).x:F3},{(mn - old.Min).y:F3},{(mn - old.Min).z:F3})", k);
+                    _seen[id] = new Seen { Min = mn, Max = mx, FirstSeen = old.FirstSeen, LastMoved = tNow, LastPresent = tNow };
                 }
-                _seen[id] = new Seen { Min = mn, Max = mx };
+                else
+                {
+                    if (tNow - old.LastPresent > ReentryInvalidateSeconds)
+                        LogInvalidation(c, $"back after {tNow - old.LastPresent:F1} s", _voxels.Invalidate(mn, mx));
+                    old.LastPresent = tNow;
+                    _seen[id] = old;
+                }
             }
 
             _gone.Clear();
@@ -398,10 +481,33 @@ namespace Minekill
             foreach (int id in _gone)
             {
                 Seen s = _seen[id];
-                _voxels.Invalidate(s.Min, s.Max);
+                int k = _voxels.Invalidate(s.Min, s.Max);
+                if (k > 0 && _invalidationLines < MaxInvalidationLines)
+                {
+                    _invalidationLines++;
+                    _log.LogInfo($"collision: collider {id} gone; {k} voxel blocks re-probed");
+                }
                 _seen.Remove(id);
             }
             _seenPrimed = true;
+        }
+
+        // Diagnostic: which colliders make the voxel cache re-probe, and how much (the falling-
+        // through-floors investigation, 2026-10-15). Once per collider per 10 s, capped.
+        private const int MaxInvalidationLines = 3000;
+        private int _invalidationLines;
+        private readonly Dictionary<int, float> _invalidationLogged = new Dictionary<int, float>();
+
+        private void LogInvalidation(Collider c, string what, int blocks)
+        {
+            if (blocks <= 0 || _invalidationLines >= MaxInvalidationLines) return;
+            int id = c.GetInstanceID();
+            if (_invalidationLogged.TryGetValue(id, out float t) && Time.unscaledTime - t < 10f) return;
+            _invalidationLogged[id] = Time.unscaledTime;
+            _invalidationLines++;
+            Vector3 sz = c.bounds.size / _puppet.Scale;
+            _log.LogInfo($"collision: {c.GetType().Name} '{c.name}' ({sz.x:F1}x{sz.y:F1}x{sz.z:F1} blocks) {what}; " +
+                         $"{blocks} voxel blocks re-probed");
         }
 
         /// <summary>A Unity world AABB as a Minecraft-space AABB (via its 8 corners).</summary>
@@ -471,10 +577,11 @@ namespace Minekill
             return sb.ToString().TrimEnd();
         }
 
-        private bool SameAsLastWritten(int count)
+        private bool SameAsLastWritten(int count, int known)
         {
-            if (count != _lastWrittenCount || _puppet.MappingGeneration != _lastWrittenGeneration) return false;
-            for (int i = 0; i < count * 6; i++) if (_boxes[i] != _lastWritten[i]) return false;
+            if (count != _lastWrittenCount || known != _lastWrittenKnown
+                || _puppet.MappingGeneration != _lastWrittenGeneration) return false;
+            for (int i = 0; i < (count + known) * 6; i++) if (_boxes[i] != _lastWritten[i]) return false;
             return true;
         }
 

@@ -37,6 +37,11 @@ ULTRAKILL; no images cross.
 - Collision of ULTRAKILL geometry for the player and every other entity; mob pathfinding across
   it; fluids flow and pool on it; projectiles hit and stick; buckets and block placement target it.
 - Spawn sync per level, void safety net, feet anchored on the floor under spawn.
+- Nothing falls through ULTRAKILL floors (2026-10-20), in layers: ULTRAKILL publishes the regions
+  whose collision is complete and Minecraft keeps every entity's moves inside them
+  (EntitySafety.guard); anything that passes or sinks into a floor top is put back on it
+  (EntitySafety.rescue); VoxelField re-checks cached blocks continuously (Verify); a collider back
+  after an absence is re-probed.
 - Blocks, fluids (correct tint), animated textures, particles, cracks (including block entities),
   the block outline; entities and block entities; first-person hand; third-person body with the
   player's skin (both layers).
@@ -69,7 +74,8 @@ ultrakill-mod/src/              BepInEx plugin (net472, ULTRAKILL's Mono)
   PuppetController.cs           MC->UK mapping, anchoring, camera, F5, disabling UK movement/guns
   InputForwarder.cs             keyboard/mouse -> INPUT slot and UK_EVENTS (SDL codes)
   CollisionPublisher.cs         exact boxes around the player and entity clusters, census, tracking
-  VoxelField.cs                 1/8-block probing of non-box colliders, merging, invalidation
+  VoxelField.cs                 1/8-block probing of non-box colliders, merging, invalidation,
+                                known regions, continuous re-checking (Verify)
   McWorldView.cs                sections, atlases, materials (F9/F10/F11), particles, world models,
                                 outline, dynamic textures, animated-sprite patches
   HudView.cs                    GUI replay (GL), hand drawing, cursor/pause handling
@@ -81,6 +87,7 @@ minecraft-mod/src/main/java/dev/minekill/   Fabric mod (Java 25)
   InputApplier.java             applies INPUT and events: keys, buttons, hotbar, cursor, screens
   PlayerPublisher.java          PLAYER, CAMERA, SELECTION
   PlayerSafety.java             spawn sync, hold, void net
+  EntitySafety.java             no falling through floors: known-region guard and rescue, every entity
   UkCollision.java              ULTRAKILL boxes: snapshot, grid index, queries for every hook
   CollisionInterest.java        entity clusters -> COLLISION_INTEREST
   UkPick.java                   aiming at ULTRAKILL surfaces (placement)
@@ -94,7 +101,7 @@ minecraft-mod/src/main/java/dev/minekill/   Fabric mod (Java 25)
 
 Mixins, by purpose:
 - input and focus: `MinecraftMixin`, `MouseHandlerMixin`, `WindowMixin`
-- collision: `EntityCollisionMixin`, `PlayerEdgeMixin`, `EntityPickMixin`
+- collision: `EntityCollisionMixin`, `EntityMoveSafetyMixin`, `PlayerEdgeMixin`, `EntityPickMixin`
 - pathfinding: `PathContextMixin`, `WalkNodeEvaluatorMixin`, `PathNavigationMixin`, `GroundPathNavigationMixin`,
   `GoalUtilsMixin`, `LandRandomPosMixin`
 - fluids, projectiles, aiming: `FlowingFluidMixin`, `AbstractArrowMixin`, `ProjectileUtilMixin`,
