@@ -34,6 +34,26 @@ public abstract class GuiRendererMixin {
         GuiCapture.INSTANCE.element(Minecraft.getInstance(), element);
     }
 
+    /**
+     * Minecraft clamps a clip rectangle to its real window. With GuiLayout the GUI is laid out
+     * for ULTRAKILL's screen, which is larger, so a scrolled list reaching below the real window
+     * got a clip 0 pixels tall, which 26.3 rejects with a crash ("Scissor size must be >0",
+     * scrolling the video settings, 2026-10-15). Such a clip now becomes 1x1 in the corner: that
+     * part is simply not drawn in Minecraft's own window (ULTRAKILL draws the GUI from the capture).
+     */
+    @Inject(method = "enableScissor", at = @At("HEAD"), cancellable = true)
+    private void minekill$noEmptyScissor(net.minecraft.client.gui.navigation.ScreenRectangle rect,
+                                         com.mojang.renderpearl.api.commands.RenderPass pass, CallbackInfo ci) {
+        var window = Minecraft.getInstance().gameRenderer.gameRenderState().windowRenderState;
+        int scale = window.guiScale;
+        double left = rect.left() * (double) scale, top = rect.top() * (double) scale;
+        double right = Math.min(rect.right() * (double) scale, window.width);
+        double bottom = Math.min(rect.bottom() * (double) scale, window.height);
+        if ((int) (right - left) > 0 && (int) (bottom - top) > 0) return;
+        pass.enableScissor(0, 0, 1, 1);
+        ci.cancel();
+    }
+
     @Inject(method = "render", at = @At("RETURN"))
     private void minekill$end(CallbackInfo ci) {
         MinekillClient client = MinekillClient.get();

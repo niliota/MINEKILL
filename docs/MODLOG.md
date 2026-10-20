@@ -2813,3 +2813,200 @@ User: glow ink sac text should look fluorescent in ULTRAKILL too.
   full brightness in the dark. Outline first, text after in the same submesh (index order).
 
 User confirmed: glowing sign text stays bright in the dark.
+
+## 2026-10-15 — falling through ULTRAKILL floors (the long-standing one)
+
+User: the player still falls through the ground in some areas, consistently; worse after changing
+levels; the stairs in Prelude's third level are the worst (they "suck the player in"). Suspects
+specific numbers.
+- Minecraft's collision stops an entity only at a box's faces; an entity already inside a box
+  falls through it. Any moment where the floor under the player is missing from the published
+  boxes therefore sinks the player in, and the returning floor then traps them.
+- **Cause 1, exact numbers (VoxelField.Overlaps):** voxel probes were shrunk by Eps = 0.004 blocks
+  on every side. ULTRAKILL's MeshColliders are hollow: an overlap finds them only where the
+  surface crosses the probe. A mesh surface within Eps of a 1/8-block boundary was in neither
+  probe: a hole. Level starts anchor the feet on the floor below (scale 1.9444 units/block; the
+  log shows e.g. uk y 104.997 -> mc 128.00), so that floor height, and every mesh floor level with
+  it, sits on a boundary. Probes are now shifted by Eps instead (same size): a boundary surface
+  marks exactly the cell on its negative side; floors keep their exact height.
+- **Cause 2, refresh gaps (VoxelField.Invalidate):** a collider appearing, moving or vanishing
+  (rooms switched on at doors, moving parts) deleted the cached blocks under its bounds; the
+  background merge (every >= 0.25 s) could snapshot before the re-probe, so those blocks, the floor
+  included, were missing from what Minecraft received. A collider that keeps moving would repeat
+  it in the same place. Invalidated blocks are now marked stale and keep their boxes until the
+  re-probe replaces them in one step.
+- **Diagnostic:** each collider that triggers re-probing is logged (name, size, appeared / moved /
+  gone, blocks), once per collider per 10 s, capped at 300 lines.
+- **Safety net (PlayerSafety.unsink):** if the player is still found inside ULTRAKILL geometry
+  whose top is at most 0.75 above the feet, and the space above is free, they are lifted onto it
+  (client and server). Logged each time, so the log shows whether causes 1-2 were all of it.
+
+User: the stairs are much better; one fall remained. Minecraft crashed scrolling the video
+settings ("a button with empty text" was visible).
+- **Crash:** `IllegalArgumentException: Scissor size must be >0, was 80x0` in
+  GuiRenderer.enableScissor. Ours: GuiLayout lays the GUI out for ULTRAKILL's larger screen, but
+  enableScissor clamps clip rectangles to the real Minecraft window, so a scrolled list reaching
+  below it got a 0-tall clip. GuiRendererMixin now turns such a clip into 1x1 (nothing drawn
+  there in Minecraft's own window; ULTRAKILL draws from the capture).
+- **The fall (logs):** no safety-net lift. Minecraft's log: walking up the spiral stairs from
+  y 136 to 154, then at (998.3, 154.25, 1082.7), near the spiral's centre (likely its open
+  stairwell), onGround went false and the player fell to the void net. ULTRAKILL's log: the stair
+  colliders below "appeared" only as the player fell past them (y 146, 144) at over a block per
+  tick. The floor at the bottom had been probed during the climb, but the published merge covers
+  only +-8 blocks vertically around a centre rebuilt at most every 0.25 s, so at 1.5+ blocks per
+  tick it was never published before the player passed it. A fast fall outran the pipeline.
+- **Look-ahead:** CollisionPublisher tracks the player's Minecraft-space velocity; above 6 blocks
+  per second, points 0.15, 0.35 and 0.7 s ahead along it join the interest points (probed and
+  merged like entity clusters, and their colliders tracked). Merge interval 0.25 -> 0.1 s.
+
+User: much better, but "something was lost" (accuracy?); fell again in 0-2, now at one specific
+point instead of a whole floor level.
+- Logs: repeated drops at about mc (993-996, ~121, 1165-1167), the same spot each time; the floor
+  there is uneven (feet at 121.88, then 122.25 a block away). Not a timing case (walking speed,
+  floor present a moment earlier, same spot again after flying back up). The logs do not say what
+  the ULTRAKILL floor there is.
+- Diagnostic added: CollisionPublisher.CheckFall. When the player's Minecraft-space vertical speed
+  passes -6 blocks/s, ULTRAKILL raycasts down from half a block above the feet (3 blocks); if it
+  hits, logs `collision FALL:` with the collider (type, convex, exact or rotated box, layer), the
+  hit point, how many published boxes are under it, and VoxelField.Describe: the block's cache
+  state, the voxel there, a fresh probe of that voxel and block, and the merged boxes holding the
+  point. Capped at 40.
+- Accuracy question: the probe change moves only surfaces lying exactly on a 1/8 boundary (now
+  always the cell on the negative side; before, no cell). Every other surface is voxelised as
+  before (to the 1/8 grid, rounded up).
+
+User: no fall at the earlier 0-2 spot or the usual places; one failure at the start of the 0-3
+stairs (fine afterwards). Says the player seems to "float" above some surfaces; unsure if new.
+Asked for the last commit's build for one comparison.
+- FALL diagnostics: ~40 entries, essentially all ordinary jumps (player 0.2-2.5 above a floor,
+  Minecraft had boxes there). None showed a floor ULTRAKILL has and Minecraft lacks.
+- The 0-3 stairs failure: from (997, 134, 1084) the player stepped to z ~1085 and fell to ~117.
+  CheckFall logged nothing: ULTRAKILL itself has no floor within 3 blocks below that spot, so both
+  games agree: an edge (likely the spiral's open middle). Minecraft's player box is narrower than
+  ULTRAKILL's capsule and may stand overhanging an edge by 0.3 blocks, so it can walk further out.
+- Floating: voxelised (mesh) floors are rounded up to the 1/8 grid, so the player can stand up
+  to 0.125 above a mesh surface (e.g. surface 139.829, box top 139.875). That is unchanged by this
+  round's probe change. Exact boxes have no offset.
+- Built 58f74db (last commit) in a separate worktree and deployed it for the comparison; the
+  current builds are saved in the scratchpad.
+
+User: insists the 0-3 stairs fall was a real fall-through, same as always; the floating existed
+before the changes (comparison build); the old build is unplayable: restore the new one.
+- Restored the current builds; worktree removed.
+- Correction: "no ULTRAKILL floor below" did not show an edge. CheckFall's ray started half a
+  block above the feet; a player who had sunk into the step starts the ray inside its collider,
+  which a ray does not hit, so it looks like empty space.
+- Diagnostics tightened. ULTRAKILL: the ray now starts 2 blocks above the feet (5 blocks long),
+  the colliders containing the feet are listed, and a miss is logged too. Minecraft
+  (PlayerSafety.reportWalkOff): when the player leaves the ground without rising and drops past
+  -0.3/tick within 10 ticks, logs the player box and every ULTRAKILL box within 1.5 blocks,
+  marking those the player overlaps. Capped at 40 each.
+
+User: after extensive testing everything held, until 0-2: the floor just past a door let the player
+through about four times, then "fixed itself". Games closed; logs intact.
+- Minecraft's log: the player stood at y 124.00 at one spot, then walked at 123.63 / 123.38 for
+  ~9 s (on ground), i.e. below the floor's top; then the safety net lifted them 0.625 (to 124.00),
+  0.25 and 0.125 at nearby spots within 6 s. So the floor's top surface was missing from what
+  Minecraft had for seconds, while something ~0.6 below (likely the slab's underside) held them,
+  and it then appeared piece by piece. walked-off reports: none (they sank while standing).
+- ULTRAKILL's log: the collider-change log had hit its 300-line cap long before, so it does not
+  say what happened at that door; earlier only doors were logged moving. No table overflow.
+- Candidates, unconfirmed: a floor/prop that animates into place after the door (Minecraft has no
+  moving platforms: rising collision ends up around a standing player), or the floor's top being
+  probed while not yet active and not re-probed (the collider not registered as new).
+- Diagnostics: CheckSunk (every frame, at most 1/s, cap 150): ULTRAKILL surface under the feet
+  (ray from 1.5 above) vs Minecraft's feet; if the feet are 0.2+ below it, logs the collider,
+  when it was first seen / last moved, the boxes Minecraft has in that column, and the voxel cache
+  there. Collider tracking keeps first-seen and last-moved times; "moved" lines give the offset;
+  the collider-change log cap is 3000.
+
+User: couldn't reproduce in 0-2 this time; fell through once at the 0-3 stairs, went spectator,
+walked them again: fine. Suspects it needs many level loads (different or the same level).
+- Many SUNK reports were spectator/creative flight through floors (constant feet height, game-mode
+  switches in Minecraft's log). The fall reports from the 0-3 run are the evidence: several show the
+  floor IN the voxel cache ("voxel SET", "probe now HIT") but NOT in the merged result ("merged
+  boxes holding the point: 0", "published ... 0"); one with the player 0.028 above the floor and
+  falling. The player was moving ~0.9 blocks/tick just after the level-start landing, over ground
+  probed moments before. Probe -> next sample starts a merge -> the sample after publishes it ->
+  Minecraft's next tick: 0.1-0.25 s, several blocks at that speed. The floor then arrived around
+  the player (inside it). Afterwards the area stays cached: "fixed itself". Every level load
+  starts with an empty cache, hence the link with loading levels. Probe speed is the same in every
+  generation (~2 us/probe, 33993 probes in 62-76 ms for this level).
+- VoxelField keeps the solid blocks probed since the snapshot of the merged result in use
+  (_recent, by probe sequence) and Collect sends them unmerged until a merge includes them.
+  CollisionPublisher samples every 0.05 s (was 0.1). Expected delay from probe to Minecraft:
+  0.05-0.1 s.
+
+User: happened again on the 0-3 stairs after many level loads; once, then the hole closed.
+- No fast falls apart from level-start drops: a slow sink. The SUNK report at the start of the
+  stairs: feet 0.233 below MeshCollider 'Floor' (first seen 4.4 s ago), no boxes in the column,
+  block "probed, empty", fresh probe HIT. The collider had been registered as new 4.4 s earlier,
+  yet its block was not stale.
+- Cause: VoxelField.Invalidate clamped to the cubes being scanned (+-10 / +-8 around the player,
+  plus entity clusters). Blocks are also cached from earlier passes, entity clusters and
+  look-ahead, and stay cached when the player moves away. A room switched on while its cached
+  blocks lay outside the clamp left them "probed, empty"; on return the scan saw them as done.
+  The hole lasted until something else re-probed them ("once, then it closes"). Fits the 0-2
+  door (room enabled at the door, some blocks cached before) and the link with many loads/visits.
+  Another report showed a corridor's colliders all "appearing" right after a sink: rooms really
+  do switch on as the player arrives.
+- Invalidate now marks every cached block in the collider's bounds, unclamped (walking the box,
+  or the cache when the box is larger than it).
+- The four lifts at (1004, 135, 1135) were at a rotating 'Pipe' / 'HurtZone' (moved every
+  sample): moving geometry passing through a player, which Minecraft cannot carry; the safety
+  net lifting them there is expected.
+
+User: player fixed ("really good"); mobs fall through the ground even more now.
+- Mobs had no safety net: PlayerSafety.unsink was the player's only. The check is now shared
+  (PlayerSafety.sunkFloorTop) and MobSafetyMixin runs it after every server-side LivingEntity tick
+  (not players, passengers, no-gravity/no-physics entities or enemy proxies). Logs
+  "safety: <mob> sank ...", capped at 200.
+- Likely reason it got worse: the look-ahead points go first in the interest list and change
+  nearly every frame while the player moves fast, and every change reset the interest
+  round-robin to point 0. With a 1 ms budget the cubes of mobs further down the list were rarely
+  probed. VoxelField now keeps the round-robin's place when its point survives, and remembers
+  cubes fully probed since the last invalidation (_interestDone) so they are skipped; cleared on
+  invalidation, eviction and level load.
+
+User (2026-10-20): still worse for mobs; blocks and spawn eggs go inside meshes, egg mobs spawn
+half inside the floor and fall into the void; the player still falls through. "Nothing should
+ever fall through the floors."
+- Logs: iron golems from eggs at integer y (the bottom of the cell the floor surface is in),
+  0.375-0.75 into the floor; deeper ones were beyond the 0.75 lift and fell. Player SUNK reports
+  over floors "first seen at level start, never moved", block "probed, empty", fresh probe HIT:
+  a wrong cached result that nothing ever re-checked. Likely cause: colliders are only reported
+  gone while in range, so a room ULTRAKILL switched off and on while the player was away came
+  back unnoticed, with its blocks probed while it was off still "empty".
+- Rebuilt as layers, so no single gap lets anything fall:
+  1. Known regions (protocol: COLLISION gets knownCount + flags; known AABBs follow the boxes
+     under the same seqlock). VoxelField scans shell by shell (Chebyshev), so the cached blocks
+     around the player form a cube; entity-cluster cubes count once fully cached. Clipped to the
+     region of the merged snapshot actually sent; none if Collect was truncated; shrunk to the
+     cube inside the cutoff sphere on table overflow.
+  2. EntitySafety.guard (EntityMoveSafetyMixin, Entity.move HEAD): a move into space outside the
+     known regions is cut short (vertical: the largest known fraction), for every entity but the
+     server-side player, projectiles, passengers, spectators and proxies. Falls wait at the edge
+     of what is known instead of passing a floor that has not arrived.
+  3. EntitySafety.rescue (Entity.move RETURN): a box top in the footprint between the old and new
+     feet (passed this move) or at most 0.75 above the feet (sank) puts the entity on top, if
+     there is room; 1.3 in the first three ticks (spawns). Replaces PlayerSafety.unsink and
+     MobSafetyMixin. The client player's rescue is sent to the server as a teleport.
+  4. VoxelField.Verify: cached results are re-checked continuously. Every frame the empty blocks
+     around/under the player (36, one query each); then a cycle over empty blocks (0.4 ms/frame)
+     and a slower one over solid blocks (0.3 ms/frame, full re-probe, replaced if different),
+     through the player's cube and every cluster cube. Logs "collision verify: ..." (capped).
+  5. TrackColliders: a tracked collider absent for over 0.5 s and back has its blocks re-probed
+     ("back after N s").
+  6. UkPick: the half-block rule now applies to every item, not only signs (blocks no longer go
+     more than half a block into meshes; egg mobs spawn at most half a block in).
+  - RebuildInterval 0.05 s (was 0.1).
+
+User: "very good indeed"; mobs stand on the ground, and when they don't they get saved; long falls
+are fine. Asked to remove the outline shown on ULTRAKILL geometry while holding a block (vanilla
+has no placement preview), then push.
+- PlayerPublisher.publishSelection no longer sends kind 2 (the placement cell); Minecraft blocks
+  keep their outline.
+- Removed the temporary diagnostics: CheckFall / CheckSunk (ULTRAKILL), VoxelField.Describe,
+  PlayerSafety.reportWalkOff. The guard / rescue / verify logs stay (capped).
+- Also in this commit (from earlier rounds): GuiRendererMixin turns a zero-size scissor into 1x1
+  (crash when scrolling video settings).

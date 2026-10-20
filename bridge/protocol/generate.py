@@ -175,7 +175,9 @@ TABLES = [
      "ULTRAKILL collision boxes near the player and near the points in COLLISION_INTEREST, already in Minecraft block coords", 16384, [
         ("tickTimestamp","i64", "epoch ms when ULTRAKILL sampled the colliders"),
         ("generation","u32", "bumps on every re-anchor; boxes from an older mapping are discarded"),
-        ("count","u32", "valid records, <= capacity"),
+        ("count","u32", "collision boxes: the first `count` records"),
+        ("knownCount","u32", "KNOWN regions: the `knownCount` records after the boxes (count + knownCount <= capacity). Inside them, every ULTRAKILL collider is in this table; outside them nothing is known"),
+        ("flags","u32", "bit 0: a level is mapped, so Minecraft must not move entities into space outside the known regions"),
      ], [
         ("minX","f32", "Minecraft block coords"),
         ("minY","f32", ""),

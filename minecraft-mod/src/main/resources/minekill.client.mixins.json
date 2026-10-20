@@ -43,6 +43,7 @@
     "ProjectileMixin",
     "InputConstantsMixin",
     "LivingEntityProxyMixin",
+    "EntityMoveSafetyMixin",
     "EntityProxyMixin"
   ],
   "injectors": {

@@ -31,18 +31,41 @@ namespace Minekill
         private const int RadiusH = 10;               // blocks probed around the player, horizontally
         private const int RadiusV = 8;                // and vertically
         private const double BudgetMs = 2.0;          // probe time allowed per frame
-        /// <summary>Minimum seconds between background merges.</summary>
-        private const float RebuildInterval = 0.25f;
+        /// <summary>
+        /// Minimum seconds between background merges (0.25 until 2026-10-15, 0.1 until 2026-10-20; the merge takes well
+        /// under a millisecond off-thread, and a shorter wait gets new floor to Minecraft sooner).
+        /// </summary>
+        private const float RebuildInterval = 0.05f;
         private const int MaxBlocks = 60000;          // cache size before far blocks are evicted
         private const int InterestR = 4;              // blocks probed around each entity cluster
         private const double InterestBudgetMs = 1.0;  // extra probe time per frame for them
-        /// <summary>Probe boxes are shrunk by this (blocks) so a surface lying exactly on a
-        /// cell boundary marks one cell, not both.</summary>
+        /// <summary>
+        /// Probe time per frame for re-checking cached blocks (see Verify): cached results are
+        /// never trusted forever. 2026-10-17 logs: floors that existed since the level started,
+        /// cached "probed, empty" while a fresh probe hit them, and nothing ever re-probed them.
+        /// </summary>
+        private const double VerifyEmptyBudgetMs = 0.4;
+        private const double VerifySolidBudgetMs = 0.3;
+        /// <summary>
+        /// Probe boxes are shifted by this (blocks) towards +x/+y/+z, so a surface lying exactly
+        /// on a cell boundary marks exactly one cell: the one on its negative side (for a floor,
+        /// the cell below it, so the floor keeps its exact height). They used to be shrunk by it
+        /// on every side instead, which left a 2 * Eps gap at every boundary: ULTRAKILL's
+        /// MeshColliders are hollow shells, an overlap only finds them where the surface passes
+        /// through the probe, so a mesh floor exactly on a boundary was found by neither cell and
+        /// was a hole (2026-10-15). Level starts anchor the player's feet on the floor below
+        /// them, which puts that floor height, and every mesh floor level with it, exactly on a
+        /// boundary.
+        /// </summary>
         private const float Eps = 0.004f;
 
         private sealed class Block
         {
             public int X, Y, Z;
+            /// <summary>Geometry here changed: probe again, but keep these boxes until then.</summary>
+            public bool Stale;
+            /// <summary>Probe order (see _recent).</summary>
+            public long Seq;
             public ulong[] Bits;      // null = probed, nothing there. 512 bits: x + y*8 + z*64
             public float[] Boxes;     // greedy-merged, Minecraft coords, 6 floats each
         }
@@ -57,18 +80,61 @@ namespace Minekill
         private readonly Vector3Int[] _interestOffsets;
         private readonly List<Vector3Int> _interest = new List<Vector3Int>();
         private int _interestCenter, _interestScan;
+        /// <summary>
+        /// Interest cubes fully probed since the last invalidation, skipped by the round-robin.
+        /// Without it the round-robin restarted at the first point whenever the point list changed,
+        /// and with the look-ahead points (first in the list, changing nearly every frame while
+        /// the player moves fast) the cubes of mobs further down the list were rarely reached:
+        /// their floors were never probed and they fell through (2026-10-17).
+        /// </summary>
+        private readonly HashSet<Vector3Int> _interestDone = new HashSet<Vector3Int>();
         private int _mask;
 
         private uint _generation = uint.MaxValue;
         private Vector3Int _scanCenter = new Vector3Int(int.MinValue, 0, 0);
         private int _scanIndex;
 
+        // Known regions: where every block is cached, so what Minecraft has there is complete.
+        // Around the player: the scan goes shell by shell (Chebyshev distance), and every block
+        // before _knownIndex is cached, so the cube of the completed shells is known. Around
+        // entity clusters: whole cubes, once every block in them is cached (_knownCubes).
+        // Minecraft keeps entities out of space outside the known regions (CollisionPublisher).
+        private int _knownIndex;
+        private readonly int[] _shellOf;
+        private readonly HashSet<Vector3Int> _knownCubes = new HashSet<Vector3Int>();
+
+        // Re-checking cached blocks: one cycle for empty blocks (one overlap query each), one for
+        // solid blocks (probed again in full, replaced when different). Each walks the player's
+        // cube, then each entity cluster's cube. Position: center (0 = player, i = _interest[i - 1])
+        // and scan index.
+        private int _verifyEmptyCenter, _verifyEmptyScan, _verifySolidCenter, _verifySolidScan;
+        private int _verifyFixLogs;
+        public int VerifyFixes { get; private set; }
+
         // Merged result. The merge sorts thousands of boxes, which done on the main thread at
         // every block boundary was a visible hitch, so it runs on a worker over a snapshot
         // of the per-block box arrays (immutable once built) and the result is swapped in.
         private bool _dirty = true;
         private Vector3Int _collectCenter = new Vector3Int(int.MinValue, 0, 0);
-        private sealed class MergeResult { public uint Generation; public List<float[]> Boxes; public double Ms; }
+        private sealed class MergeResult
+        {
+            public uint Generation; public List<float[]> Boxes; public double Ms; public long Seq;
+            /// <summary>The snapshot's player block and entity clusters: the region it covers.</summary>
+            public Vector3Int Center; public HashSet<Vector3Int> Interest;
+        }
+        /// <summary>The merged result the last Collect sent.</summary>
+        private MergeResult _collected;
+
+        /// <summary>
+        /// Solid blocks probed since the snapshot of the merged result in use, sent to Minecraft
+        /// as they are (unmerged) until a merge includes them. Before this, a block waited for
+        /// the next background merge and the sample after it: 0.1-0.25 s in which a player
+        /// moving fast over freshly probed ground (every level load starts with an empty cache)
+        /// stood where Minecraft had no floor yet, sank in, and was inside the floor when it
+        /// arrived (2026-10-15 logs: the floor in the cache, "merged boxes holding the point: 0").
+        /// </summary>
+        private readonly List<Block> _recent = new List<Block>();
+        private long _probeSeq;
         private volatile MergeResult _result;
         private Task<MergeResult> _rebuild;
         private float _lastRebuild = -1f;
@@ -82,6 +148,8 @@ namespace Minekill
         public double LastMergeMs => _result != null ? _result.Ms : 0;
         public int Invalidations { get; private set; }
         public bool Complete => _scanIndex >= _offsets.Length;
+        /// <summary>The last Collect ran out of room: what it sent is not complete anywhere.</summary>
+        public bool LastCollectTruncated { get; private set; }
 
         public VoxelField(PuppetController puppet, Func<Collider, bool> ignore,
                           BepInEx.Logging.ManualLogSource log)
@@ -95,8 +163,16 @@ namespace Minekill
             for (int y = -RadiusV; y <= RadiusV; y++)
             for (int z = -RadiusH; z <= RadiusH; z++)
                 list.Add(new Vector3Int(x, y, z));
-            list.Sort((p, q) => p.sqrMagnitude.CompareTo(q.sqrMagnitude));
+            // Shell by shell (Chebyshev distance), nearest first inside a shell, so the blocks
+            // done so far always form a cube around the player (the known region).
+            list.Sort((p, q) =>
+            {
+                int c = Shell(p).CompareTo(Shell(q));
+                return c != 0 ? c : p.sqrMagnitude.CompareTo(q.sqrMagnitude);
+            });
             _offsets = list.ToArray();
+            _shellOf = new int[_offsets.Length];
+            for (int i = 0; i < _offsets.Length; i++) _shellOf[i] = Shell(_offsets[i]);
 
             var small = new List<Vector3Int>();
             for (int x = -InterestR; x <= InterestR; x++)
@@ -107,6 +183,8 @@ namespace Minekill
             _interestOffsets = small.ToArray();
         }
 
+        private static int Shell(Vector3Int o) => Math.Max(Math.Abs(o.x), Math.Max(Math.Abs(o.y), Math.Abs(o.z)));
+
         /// <summary>Probe more blocks, within the frame budget. Call every frame.</summary>
         public void Tick(int mask, Vector3 mcPlayer, List<Vector3> interest)
         {
@@ -116,10 +194,14 @@ namespace Minekill
                 changed = Floor(interest[i]) != _interest[i];
             if (changed)
             {
+                // Keep the round-robin's place when the point it is on is still there.
+                Vector3Int at = _interestCenter < _interest.Count ? _interest[_interestCenter] : new Vector3Int(int.MinValue, 0, 0);
                 _interest.Clear();
                 foreach (Vector3 p in interest) _interest.Add(Floor(p));
-                _interestCenter = 0;
-                _interestScan = 0;
+                int keep = _interest.IndexOf(at);
+                if (keep < 0) { _interestCenter = 0; _interestScan = 0; }
+                else _interestCenter = keep;
+                if (_interestDone.Count > 4096) _interestDone.Clear();
                 _dirty = true;
             }
 
@@ -129,6 +211,10 @@ namespace Minekill
                 // New mapping (level load): every cached cell is in the old frame.
                 _generation = _puppet.MappingGeneration;
                 _blocks.Clear();
+                _recent.Clear();
+                _interestDone.Clear();
+                _knownCubes.Clear();
+                _knownIndex = 0;
                 _result = null;
                 BlocksSolid = 0;
                 Probes = 0;
@@ -144,6 +230,7 @@ namespace Minekill
             {
                 _scanCenter = center;
                 _scanIndex = 0;
+                _knownIndex = 0;
                 if (_blocks.Count > MaxBlocks) Evict(center);
             }
 
@@ -152,7 +239,7 @@ namespace Minekill
             {
                 Vector3Int b = center + _offsets[_scanIndex++];
                 long key = Key(b.x, b.y, b.z);
-                if (_blocks.ContainsKey(key)) continue;
+                if (_blocks.TryGetValue(key, out Block have) && !have.Stale) continue;
                 ProbeBlock(b.x, b.y, b.z, key);
             }
 
@@ -162,8 +249,17 @@ namespace Minekill
             while (_interest.Count > 0 && visited < _interest.Count && _sw.Elapsed.TotalMilliseconds < until)
             {
                 if (_interestCenter >= _interest.Count) _interestCenter = 0;
+                if (_interestScan == 0 && _interestDone.Contains(_interest[_interestCenter]))
+                {
+                    _interestCenter++;
+                    visited++;
+                    continue;
+                }
                 if (_interestScan >= _interestOffsets.Length)
                 {
+                    _interestDone.Add(_interest[_interestCenter]);
+                    if (_knownCubes.Count > 4096) _knownCubes.Clear();
+                    _knownCubes.Add(_interest[_interestCenter]);
                     _interestScan = 0;
                     _interestCenter++;
                     visited++;
@@ -171,10 +267,138 @@ namespace Minekill
                 }
                 Vector3Int b = _interest[_interestCenter] + _interestOffsets[_interestScan++];
                 long key = Key(b.x, b.y, b.z);
-                if (_blocks.ContainsKey(key)) continue;
+                if (_blocks.TryGetValue(key, out Block have) && !have.Stale) continue;
                 ProbeBlock(b.x, b.y, b.z, key);
             }
+
+            // Known extent around the player: every block before _knownIndex is cached.
+            for (int guard = 0; _knownIndex < _offsets.Length && guard < 8000; guard++)
+            {
+                Vector3Int b = center + _offsets[_knownIndex];
+                if (!_blocks.ContainsKey(Key(b.x, b.y, b.z))) break;
+                _knownIndex++;
+            }
+
+            Verify(center);
             ProbeMs += _sw.Elapsed.TotalMilliseconds;
+        }
+
+        /// <summary>
+        /// Re-check cached blocks, so a wrong cached result never lasts. Whatever made it wrong
+        /// (a collider switched on or off out of the tracker's sight, physics not yet updated when
+        /// probed), it is found and fixed within a cycle. First, every frame, the empty blocks right
+        /// around and under the player; then a cycle over empty blocks and a slower one over solid
+        /// blocks, through the player's cube and every entity cluster's cube.
+        /// </summary>
+        private void Verify(Vector3Int center)
+        {
+            for (int dy = -2; dy <= 1; dy++)
+            for (int dx = -1; dx <= 1; dx++)
+            for (int dz = -1; dz <= 1; dz++)
+                VerifyEmpty(center.x + dx, center.y + dy, center.z + dz);
+
+            double until = _sw.Elapsed.TotalMilliseconds + VerifyEmptyBudgetMs;
+            for (int steps = 0; _sw.Elapsed.TotalMilliseconds < until && steps < 20000; steps++)
+                if (!VerifyStep(center, ref _verifyEmptyCenter, ref _verifyEmptyScan, false)) break;
+            until = _sw.Elapsed.TotalMilliseconds + VerifySolidBudgetMs;
+            for (int steps = 0; _sw.Elapsed.TotalMilliseconds < until && steps < 20000; steps++)
+                if (!VerifyStep(center, ref _verifySolidCenter, ref _verifySolidScan, true)) break;
+        }
+
+        /// <summary>One block of a verify cycle. False when there is nothing to walk.</summary>
+        private bool VerifyStep(Vector3Int center, ref int c, ref int scan, bool solid)
+        {
+            int centers = 1 + _interest.Count;
+            if (c >= centers) { c = 0; scan = 0; }
+            Vector3Int[] offs = c == 0 ? _offsets : _interestOffsets;
+            if (scan >= offs.Length) { c++; scan = 0; return true; }
+            Vector3Int b = (c == 0 ? center : _interest[c - 1]) + offs[scan++];
+            if (solid) VerifySolid(b.x, b.y, b.z);
+            else VerifyEmpty(b.x, b.y, b.z);
+            return true;
+        }
+
+        private void VerifyEmpty(int x, int y, int z)
+        {
+            long key = Key(x, y, z);
+            if (!_blocks.TryGetValue(key, out Block b) || b.Stale || b.Bits != null) return;
+            var origin = new Vector3(x, y, z);
+            if (!Overlaps(origin, origin + Vector3.one)) return;
+            ProbeBlock(x, y, z, key);
+            if (_blocks[key].Bits != null) ReportFix(x, y, z, "cached empty, has geometry");
+        }
+
+        private void VerifySolid(int x, int y, int z)
+        {
+            long key = Key(x, y, z);
+            if (!_blocks.TryGetValue(key, out Block b) || b.Stale || b.Bits == null) return;
+            var origin = new Vector3(x, y, z);
+            var bits = new ulong[Res * Res * Res / 64];
+            if (Overlaps(origin, origin + Vector3.one))
+            {
+                var probe = new Block { Bits = bits };
+                Refine(probe, origin, 0, 0, 0, Res);
+            }
+            bool same = true;
+            for (int i = 0; i < bits.Length && same; i++) same = bits[i] == b.Bits[i];
+            if (same) return;
+            ProbeBlock(x, y, z, key);
+            ReportFix(x, y, z, "cached shape was out of date");
+        }
+
+        private void ReportFix(int x, int y, int z, string what)
+        {
+            VerifyFixes++;
+            if (_verifyFixLogs >= 300) return;
+            _verifyFixLogs++;
+            _log.LogInfo($"collision verify: block {x},{y},{z} {what}; re-probed");
+        }
+
+        /// <summary>
+        /// Append the known regions (Minecraft AABBs, 6 floats each) to <paramref name="dst"/> at
+        /// box index <paramref name="at"/>, at most <paramref name="max"/>. Only space whose blocks
+        /// are all in what the last <see cref="Collect"/> sent: the merged result covered its own
+        /// snapshot's region, plus the blocks probed since, so a known region is clipped to that
+        /// snapshot's region. Returns how many.
+        /// </summary>
+        public int CollectKnown(Vector3 mcPlayer, float[] dst, int at, int max)
+        {
+            if (max <= 0 || LastCollectTruncated) return 0;
+            var center = new Vector3Int(Mathf.FloorToInt(mcPlayer.x), Mathf.FloorToInt(mcPlayer.y),
+                                        Mathf.FloorToInt(mcPlayer.z));
+            if (center != _scanCenter) return 0;      // the cache was not advanced for this center yet
+            MergeResult r = _collected;
+            int n = 0;
+            int k = _knownIndex >= _offsets.Length ? RadiusH : _shellOf[_knownIndex] - 1;
+            if (k >= 0)
+            {
+                int kv = Math.Min(k, RadiusV);
+                Vector3Int mn = new Vector3Int(center.x - k, center.y - kv, center.z - k);
+                Vector3Int mx = new Vector3Int(center.x + k, center.y + kv, center.z + k);
+                if (r != null)
+                {
+                    mn = Vector3Int.Max(mn, new Vector3Int(r.Center.x - RadiusH, r.Center.y - RadiusV, r.Center.z - RadiusH));
+                    mx = Vector3Int.Min(mx, new Vector3Int(r.Center.x + RadiusH, r.Center.y + RadiusV, r.Center.z + RadiusH));
+                }
+                if (mn.x <= mx.x && mn.y <= mx.y && mn.z <= mx.z)
+                    PutBox(dst, at + n++, mn, mx);
+            }
+            foreach (Vector3Int ic in _interest)
+            {
+                if (n >= max) break;
+                if (!_knownCubes.Contains(ic)) continue;
+                if (r != null && !r.Interest.Contains(ic)) continue;
+                PutBox(dst, at + n++, ic - Vector3Int.one * InterestR, ic + Vector3Int.one * InterestR);
+            }
+            return n;
+        }
+
+        /// <summary>Blocks mn..mx inclusive as a Minecraft AABB.</summary>
+        private static void PutBox(float[] dst, int i, Vector3Int mn, Vector3Int mx)
+        {
+            int o = i * 6;
+            dst[o] = mn.x; dst[o + 1] = mn.y; dst[o + 2] = mn.z;
+            dst[o + 3] = mx.x + 1; dst[o + 4] = mx.y + 1; dst[o + 5] = mx.z + 1;
         }
 
         private static Vector3Int Floor(Vector3 p) =>
@@ -223,62 +447,107 @@ namespace Minekill
                             snapshot.Add(blk.Boxes);
                     }
                 uint gen = _generation;
-                _rebuild = Task.Run(() => Merge(snapshot, gen));
+                long seq = _probeSeq;
+                var interestSet = new HashSet<Vector3Int>(_interest);
+                Vector3Int snapCenter = center;
+                _rebuild = Task.Run(() =>
+                {
+                    var res = Merge(snapshot, gen);
+                    res.Seq = seq;
+                    res.Center = snapCenter;
+                    res.Interest = interestSet;
+                    return res;
+                });
             }
 
             MergeResult r = _result;
-            if (r == null || r.Generation != _generation) return 0;
-            int n = Math.Min(r.Boxes.Count, max);
-            for (int i = 0; i < n; i++) Array.Copy(r.Boxes[i], 0, dst, (at + i) * 6, 6);
+            int n = 0;
+            long mergedSeq = 0;
+            _collected = r != null && r.Generation == _generation ? r : null;
+            LastCollectTruncated = false;
+            if (r != null && r.Generation == _generation)
+            {
+                n = Math.Min(r.Boxes.Count, max);
+                if (r.Boxes.Count > max) LastCollectTruncated = true;
+                for (int i = 0; i < n; i++) Array.Copy(r.Boxes[i], 0, dst, (at + i) * 6, 6);
+                mergedSeq = r.Seq;
+            }
+            // Then every solid block probed after that merge's snapshot, unmerged. Blocks since
+            // replaced by a newer probe are skipped (the newer one is in the list too).
+            _recent.RemoveAll(b => b.Seq <= mergedSeq);
+            foreach (Block b in _recent)
+            {
+                if (b.Boxes == null || !_blocks.TryGetValue(Key(b.X, b.Y, b.Z), out Block cur) || cur != b) continue;
+                if (n + b.Boxes.Length / 6 > max) LastCollectTruncated = true;
+                for (int k = 0; k < b.Boxes.Length && n < max; k += 6, n++)
+                    Array.Copy(b.Boxes, k, dst, (at + n) * 6, 6);
+            }
             return n;
         }
 
         /// <summary>
-        /// Forget cached blocks overlapping a Minecraft-space box, so they are probed again.
-        /// Called when a collider appears, moves or disappears there.
+        /// Mark cached blocks overlapping a Minecraft-space box stale, so they are probed again.
+        /// Called when a collider appears, moves or disappears there. Returns how many.
+        ///
+        /// Stale blocks keep their boxes until the new probe replaces them. They used to be
+        /// deleted, and a background merge that snapshotted the cache before the re-probe left
+        /// those blocks out of what Minecraft received for at least a merge interval (0.25 s):
+        /// the floor under the player vanished, the player sank in, and when it came back the
+        /// player was inside it, which Minecraft's collision does not push out of, so they fell
+        /// through (2026-10-15: "falling through the ground after passing doors", stairs).
         /// </summary>
-        public void Invalidate(Vector3 mcMin, Vector3 mcMax)
+        public int Invalidate(Vector3 mcMin, Vector3 mcMax)
         {
-            if (_blocks.Count == 0) return;
-            // Only blocks the scans can reach matter; clamp a huge collider to the cube around
-            // the player and the entity clusters.
-            int sx0 = _scanCenter.x - RadiusH, sx1 = _scanCenter.x + RadiusH;
-            int sy0 = _scanCenter.y - RadiusV, sy1 = _scanCenter.y + RadiusV;
-            int sz0 = _scanCenter.z - RadiusH, sz1 = _scanCenter.z + RadiusH;
-            foreach (Vector3Int ic in _interest)
+            if (_blocks.Count == 0) return 0;
+            // Every cached block in the box, wherever it is. This used to be clamped to the cubes
+            // being scanned around the player and entity clusters; but blocks are also cached
+            // from earlier visits, entity clusters and look-ahead, and stay cached when the player
+            // moves away. A room switched on while those blocks were out of the clamp kept them
+            // "probed, empty" for good: the player walked onto them later and fell through, until
+            // something else made them re-probe (2026-10-16 logs: floor "first seen 4.4 s ago",
+            // block "probed, empty", a fresh probe "HIT").
+            int x0 = Mathf.FloorToInt(mcMin.x), x1 = Mathf.FloorToInt(mcMax.x);
+            int y0 = Mathf.FloorToInt(mcMin.y), y1 = Mathf.FloorToInt(mcMax.y);
+            int z0 = Mathf.FloorToInt(mcMin.z), z1 = Mathf.FloorToInt(mcMax.z);
+            long cells = (long)(x1 - x0 + 1) * (y1 - y0 + 1) * (z1 - z0 + 1);
+            int marked = 0;
+            if (cells <= _blocks.Count)
             {
-                sx0 = Math.Min(sx0, ic.x - InterestR); sx1 = Math.Max(sx1, ic.x + InterestR);
-                sy0 = Math.Min(sy0, ic.y - InterestR); sy1 = Math.Max(sy1, ic.y + InterestR);
-                sz0 = Math.Min(sz0, ic.z - InterestR); sz1 = Math.Max(sz1, ic.z + InterestR);
+                for (int x = x0; x <= x1; x++)
+                for (int y = y0; y <= y1; y++)
+                for (int z = z0; z <= z1; z++)
+                {
+                    if (!_blocks.TryGetValue(Key(x, y, z), out Block b) || b.Stale) continue;
+                    b.Stale = true;
+                    marked++;
+                }
             }
-            int x0 = Math.Max(Mathf.FloorToInt(mcMin.x), sx0), x1 = Math.Min(Mathf.FloorToInt(mcMax.x), sx1);
-            int y0 = Math.Max(Mathf.FloorToInt(mcMin.y), sy0), y1 = Math.Min(Mathf.FloorToInt(mcMax.y), sy1);
-            int z0 = Math.Max(Mathf.FloorToInt(mcMin.z), sz0), z1 = Math.Min(Mathf.FloorToInt(mcMax.z), sz1);
-            if ((long)(x1 - x0 + 1) * (y1 - y0 + 1) * (z1 - z0 + 1) > 400000) return;   // pathological
-            int removed = 0;
-            for (int x = x0; x <= x1; x++)
-            for (int y = y0; y <= y1; y++)
-            for (int z = z0; z <= z1; z++)
+            else
             {
-                long key = Key(x, y, z);
-                if (!_blocks.TryGetValue(key, out Block b)) continue;
-                if (b.Boxes != null) BlocksSolid--;
-                _blocks.Remove(key);
-                removed++;
+                // A huge collider: walk the cache instead of the box.
+                foreach (Block b in _blocks.Values)
+                {
+                    if (b.Stale || b.X < x0 || b.X > x1 || b.Y < y0 || b.Y > y1 || b.Z < z0 || b.Z > z1) continue;
+                    b.Stale = true;
+                    marked++;
+                }
             }
-            if (removed > 0)
+            if (marked > 0)
             {
-                Invalidations += removed;
-                _dirty = true;
-                _scanIndex = 0;     // resume the nearest-first scan so the gap refills first
+                Invalidations += marked;
+                _scanIndex = 0;     // resume the nearest-first scan so the nearest stale blocks go first
                 _interestScan = 0;
+                _interestDone.Clear();
             }
+            return marked;
         }
 
         // ---- probing ----------------------------------------------------------------
 
         private void ProbeBlock(int bx, int by, int bz, long key)
         {
+            // A stale block is replaced in one step: its old boxes stay in use until now.
+            if (_blocks.TryGetValue(key, out Block old) && old.Boxes != null) BlocksSolid--;
             var block = new Block { X = bx, Y = by, Z = bz };
             _blocks[key] = block;
             _dirty = true;
@@ -291,6 +560,8 @@ namespace Minekill
             if (IsEmpty(block.Bits)) { block.Bits = null; return; }
             block.Boxes = Greedy(block.Bits, origin);
             BlocksSolid++;
+            block.Seq = ++_probeSeq;
+            _recent.Add(block);
         }
 
         /// <summary>The cell at voxel (vx,vy,vz) of size s is known to overlap; test its 8 children.</summary>
@@ -313,7 +584,7 @@ namespace Minekill
         private bool Overlaps(Vector3 mcMin, Vector3 mcMax)
         {
             Vector3 e = Vector3.one * Eps;
-            _puppet.McBoxToUk(mcMin + e, mcMax - e, out Vector3 c, out Vector3 half, out Quaternion rot);
+            _puppet.McBoxToUk(mcMin + e, mcMax + e, out Vector3 c, out Vector3 half, out Quaternion rot);
             Probes++;
             int n = Physics.OverlapBoxNonAlloc(c, half, _buf, rot, _mask, QueryTriggerInteraction.Ignore);
             if (n >= _buf.Length) return true;    // buffer full: assume something relevant is in there
@@ -442,6 +713,9 @@ namespace Minekill
                 if (_blocks[k].Boxes != null) BlocksSolid--;
                 _blocks.Remove(k);
             }
+            _interestDone.Clear();
+            _knownCubes.Clear();
+            _knownIndex = 0;
             _dirty = true;
         }
 

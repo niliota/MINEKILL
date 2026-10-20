@@ -388,6 +388,9 @@ public final class Bridge implements AutoCloseable {
         public long tickTimestamp;
         public int generation;
         public int count;
+        /** Known regions, stored in boxes after the first count boxes. */
+        public int knownCount;
+        public int flags;
         public final float[] boxes = new float[Protocol.TBL_COLLISION_CAPACITY * 6];
     }
 
@@ -452,8 +455,11 @@ public final class Bridge implements AutoCloseable {
 
             long ts = buf.getLong(base + Protocol.TBL_COLLISION_OFF_TICKTIMESTAMP);
             int gen = buf.getInt(base + Protocol.TBL_COLLISION_OFF_GENERATION);
-            int count = buf.getInt(base + Protocol.TBL_COLLISION_OFF_COUNT);
-            if (count < 0 || count > Protocol.TBL_COLLISION_CAPACITY) {
+            int boxCount = buf.getInt(base + Protocol.TBL_COLLISION_OFF_COUNT);
+            int known = buf.getInt(base + Protocol.TBL_COLLISION_OFF_KNOWNCOUNT);
+            int flags = buf.getInt(base + Protocol.TBL_COLLISION_OFF_FLAGS);
+            int count = boxCount + known;
+            if (boxCount < 0 || known < 0 || count > Protocol.TBL_COLLISION_CAPACITY) {
                 // Out of range is a torn or garbage read, never a real list.
                 Thread.onSpinWait();
                 continue;
@@ -474,7 +480,9 @@ public final class Bridge implements AutoCloseable {
             if (s1 != s2) { Thread.onSpinWait(); continue; }
             out.tickTimestamp = ts;
             out.generation = gen;
-            out.count = count;
+            out.count = boxCount;
+            out.knownCount = known;
+            out.flags = flags;
             return true;
         }
         return false;
