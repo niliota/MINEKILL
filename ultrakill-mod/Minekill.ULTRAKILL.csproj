@@ -12,6 +12,11 @@
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <NoWarn>CS0649;CS0169</NoWarn>
+    <!-- The PDB is embedded in the DLL instead of named by its absolute path, and source paths
+         are mapped, so a published DLL carries no path from the machine that built it. -->
+    <DebugType>embedded</DebugType>
+    <Deterministic>true</Deterministic>
+    <PathMap>$(MSBuildProjectDirectory)=/_/</PathMap>
 
     <!-- Both directories are read-only inputs. Default them to the layout in this
          repo, override on the command line if the game lives elsewhere. -->

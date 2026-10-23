@@ -6,10 +6,10 @@ public class LayoutCheck
 {
     public static void main(String[] args)
     {
-        System.out.println("CONST:HEADER_SIZE:" + dev.minekill.bridge.Protocol.HEADER_SIZE);
-        System.out.println("CONST:TOTAL_SIZE:" + dev.minekill.bridge.Protocol.TOTAL_SIZE);
+        System.out.println("CONST:HEADER_SIZE:" + space.niliota.minekill.bridge.Protocol.HEADER_SIZE);
+        System.out.println("CONST:TOTAL_SIZE:" + space.niliota.minekill.bridge.Protocol.TOTAL_SIZE);
         // Same set the C# side prints: every slot/ring offset and every table constant.
-        for (java.lang.reflect.Field f : dev.minekill.bridge.Protocol.class.getFields())
+        for (java.lang.reflect.Field f : space.niliota.minekill.bridge.Protocol.class.getFields())
         {
             String n = f.getName();
             if (f.getType() != int.class) continue;
@@ -19,24 +19,24 @@ public class LayoutCheck
             catch (IllegalAccessException e) { System.out.println("CONST:" + n + ":UNREADABLE"); }
         }
 
-        dumpSlot("SlotPlayer", dev.minekill.bridge.Protocol.SlotPlayer.class,
-                 dev.minekill.bridge.Protocol.SlotPlayer.SIZE,
-                 dev.minekill.bridge.Protocol.SlotPlayer.OFF_SEQ);
-        dumpSlot("SlotCamera", dev.minekill.bridge.Protocol.SlotCamera.class,
-                 dev.minekill.bridge.Protocol.SlotCamera.SIZE,
-                 dev.minekill.bridge.Protocol.SlotCamera.OFF_SEQ);
-        dumpSlot("SlotInput", dev.minekill.bridge.Protocol.SlotInput.class,
-                 dev.minekill.bridge.Protocol.SlotInput.SIZE,
-                 dev.minekill.bridge.Protocol.SlotInput.OFF_SEQ);
-        dumpSlot("SlotCorrection", dev.minekill.bridge.Protocol.SlotCorrection.class,
-                 dev.minekill.bridge.Protocol.SlotCorrection.SIZE,
-                 dev.minekill.bridge.Protocol.SlotCorrection.OFF_SEQ);
-        dumpSlot("SlotLevel", dev.minekill.bridge.Protocol.SlotLevel.class,
-                 dev.minekill.bridge.Protocol.SlotLevel.SIZE,
-                 dev.minekill.bridge.Protocol.SlotLevel.OFF_SEQ);
-        dumpSlot("SlotSelection", dev.minekill.bridge.Protocol.SlotSelection.class,
-                 dev.minekill.bridge.Protocol.SlotSelection.SIZE,
-                 dev.minekill.bridge.Protocol.SlotSelection.OFF_SEQ);
+        dumpSlot("SlotPlayer", space.niliota.minekill.bridge.Protocol.SlotPlayer.class,
+                 space.niliota.minekill.bridge.Protocol.SlotPlayer.SIZE,
+                 space.niliota.minekill.bridge.Protocol.SlotPlayer.OFF_SEQ);
+        dumpSlot("SlotCamera", space.niliota.minekill.bridge.Protocol.SlotCamera.class,
+                 space.niliota.minekill.bridge.Protocol.SlotCamera.SIZE,
+                 space.niliota.minekill.bridge.Protocol.SlotCamera.OFF_SEQ);
+        dumpSlot("SlotInput", space.niliota.minekill.bridge.Protocol.SlotInput.class,
+                 space.niliota.minekill.bridge.Protocol.SlotInput.SIZE,
+                 space.niliota.minekill.bridge.Protocol.SlotInput.OFF_SEQ);
+        dumpSlot("SlotCorrection", space.niliota.minekill.bridge.Protocol.SlotCorrection.class,
+                 space.niliota.minekill.bridge.Protocol.SlotCorrection.SIZE,
+                 space.niliota.minekill.bridge.Protocol.SlotCorrection.OFF_SEQ);
+        dumpSlot("SlotLevel", space.niliota.minekill.bridge.Protocol.SlotLevel.class,
+                 space.niliota.minekill.bridge.Protocol.SlotLevel.SIZE,
+                 space.niliota.minekill.bridge.Protocol.SlotLevel.OFF_SEQ);
+        dumpSlot("SlotSelection", space.niliota.minekill.bridge.Protocol.SlotSelection.class,
+                 space.niliota.minekill.bridge.Protocol.SlotSelection.SIZE,
+                 space.niliota.minekill.bridge.Protocol.SlotSelection.OFF_SEQ);
     }
 
     static void dumpSlot(String name, Class<?> cls, int size, int seqOff)

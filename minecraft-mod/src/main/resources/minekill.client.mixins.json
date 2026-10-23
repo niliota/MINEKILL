@@ -1,7 +1,7 @@
 {
   "required": true,
   "minVersion": "0.8",
-  "package": "dev.minekill.mixin",
+  "package": "space.niliota.minekill.mixin",
   "compatibilityLevel": "JAVA_25",
   "client": [
     "MinecraftMixin",

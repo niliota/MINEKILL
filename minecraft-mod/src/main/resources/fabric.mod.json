@@ -14,7 +14,7 @@
   "environment": "client",
   "entrypoints": {
     "client": [
-      "dev.minekill.MinekillClient"
+      "space.niliota.minekill.MinekillClient"
     ]
   },
   "mixins": [
