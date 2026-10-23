@@ -29,6 +29,15 @@ with `git status --ignored` and `git log --all --stat`.
   developer as every Fabric mod build does. Minecraft 26.3 is distributed unobfuscated; the mod
   refers to its classes by those names.
 
+## Releases
+
+Each GitHub release carries two files, both built from this repository: `Minekill.ULTRAKILL.dll`
+(the BepInEx plugin) and `minekill-minecraft-<version>.jar` (the Fabric mod). They contain only
+MINEKILL's own compiled code: no game files, no assets, no code from either game. The plugin
+uses ULTRAKILL's, Unity's and BepInEx's assemblies from the player's install at runtime; the
+mod uses Minecraft's classes from the player's game. Release builds carry no paths from the
+build machine (the plugin's debug symbols are embedded with mapped source paths).
+
 ## License
 
 MINEKILL's own code is under the **GNU GPL v3.0** (`LICENSE`). The license covers this project's

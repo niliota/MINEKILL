@@ -21,9 +21,16 @@ two games.
   sneaking, jumping, swimming, flying in creative). ULTRAKILL's camera follows Minecraft's eye.
   ULTRAKILL's own movement, guns and HUD are switched off.
 - **ULTRAKILL's level is solid to Minecraft.** Walls, floors, ramps and doors collide with the
-  player, with mobs, dropped items and minecarts. Mobs path-find across ULTRAKILL floors.
-  Arrows, tridents and thrown items hit and stick. Water and lava pool on and flow off
+  player, with mobs, dropped items and minecarts, and nothing falls through the floors: an entity
+  waits at the edge of the space whose collision has arrived instead of falling into it, and
+  anything that ends up inside a floor is put back on top. Mobs path-find across ULTRAKILL
+  floors. Arrows, tridents and thrown items hit and stick. Water and lava pool on and flow off
   ULTRAKILL geometry.
+- **Minecraft blocks are solid to ULTRAKILL's enemies** (they walk around them, their shots hit
+  them), and **the two games fight each other.** Every ULTRAKILL enemy near you has an invisible
+  Minecraft stand-in, so swords, bows, tridents, potions, enchantments and fire hurt it. ULTRAKILL's
+  attacks on you become Minecraft damage, so shields and armour work. When you die in Minecraft,
+  ULTRAKILL restarts from its checkpoint.
 - **Building and mining.** Place Minecraft blocks anywhere, including onto ULTRAKILL surfaces,
   and mine them, with break cracks, particles and the block outline. Buckets work on ULTRAKILL
   surfaces too.
@@ -36,7 +43,7 @@ two games.
 - **First-person hand and held items, F5 third person** with your own skin, and the player
   model in the inventory.
 
-Not done yet: combat balance, flames on burning mobs, and hiding the Minecraft window.
+See *Known limitations* below for what is not done yet.
 
 ---
 
@@ -95,11 +102,15 @@ ULTRAKILL's side opens them. Everything else is the same code.
 3. **Fabric in Minecraft.** Create a Minecraft 26.3 instance with Fabric Loader 0.19.5 or newer
    (any launcher with Fabric support works).
 4. **The Minecraft mod.** Copy `minekill-minecraft-0.1.0.jar` into the instance's `mods/` folder.
+   No Fabric API is needed.
 5. **A world.** Create a single-player world. A **Superflat world with the Void preset** is
    recommended: MINEKILL puts your Minecraft player in ULTRAKILL's level at a fixed spot
    (x 1000, y 128, z 1000), and Minecraft terrain there would stand in the way.
 
-There are no prebuilt releases yet; build the two files as described in *Building*.
+Both files are on the [Releases page](https://github.com/niliota/MINEKILL/releases): download
+`Minekill.ULTRAKILL.dll` and `minekill-minecraft-0.1.0.jar` from the latest release. The two
+must come from the same release (they check each other's bridge layout at startup). You can also
+build them yourself, as described in *Building*.
 
 ## Playing
 
@@ -185,10 +196,26 @@ compile-time references, and Minecraft is fetched by Fabric Loom from Mojang as 
   *Configuration*. ULTRAKILL's live state is in `ultrakill-status.txt`, which is more reliable
   than BepInEx's log under Wine.
 - **Stutter.** Make sure Minecraft is not minimised, and lower its render distance.
-- **The Minecraft world sits a little higher or lower after a level restart.** Known, being
-  investigated. Restarting the level again usually fixes it.
 - **Startup crash in Minecraft after updating.** MINEKILL targets Minecraft 26.3 exactly; its
   hooks name 26.3's own classes and methods.
+
+## Known limitations
+
+This is version 0.1, an early release.
+
+- **Windows is untested.** Everything was developed and played on Linux with ULTRAKILL under
+  Wine. The Windows code paths exist but have never run.
+- **The Minecraft window stays open** behind ULTRAKILL (it is needed to load a world).
+- **Combat is not balanced yet.** Minecraft damage reaches ULTRAKILL enemies 1:1, so small
+  enemies die in one hit.
+- **Burning mobs show no flames.**
+- **ULTRAKILL slopes are steps.** Minecraft collides only with boxes, so ULTRAKILL's sloped and
+  curved geometry reaches it as 1/8-block steps: walking up a ramp moves you up in small steps,
+  and you can stand up to 1/8 block above a mesh floor.
+- **Mobs more than 48 blocks away hold still** until you come closer: ULTRAKILL only prepares
+  collision around entities that near, and they wait rather than fall.
+- **Signs placed on ULTRAKILL walls** can sit slightly in front of or inside the surface.
+- **Long scrolled lists in Minecraft menus are not clipped** to their box.
 
 ## Uninstall
 

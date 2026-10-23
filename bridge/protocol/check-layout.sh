@@ -27,7 +27,7 @@ echo "== Java layout =="
 # Protocol.java has no dependencies beyond java.lang, so plain javac is enough.
 if ! javac -d "$TMP/classes" \
      "$HERE/layout-check-java/LayoutCheck.java" \
-     "$(dirname "$HERE")/../minecraft-mod/src/main/java/dev/minekill/bridge/Protocol.java" \
+     "$(dirname "$HERE")/../minecraft-mod/src/main/java/space/niliota/minekill/bridge/Protocol.java" \
      2>"$TMP/javac.err"; then
   echo "javac failed:"; tail -20 "$TMP/javac.err"; exit 1
 fi

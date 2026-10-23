@@ -2419,9 +2419,9 @@ User confirmed: chest/banner/sign cracks; arrows, tridents and thrown projectile
 
 ### Renamed: UltraCraft -> MINEKILL
 
-User's request (they rename the GitHub repo themselves). Package `dev.ultracraft` -> `dev.minekill`,
+User's request (they rename the GitHub repo themselves). Package `dev.ultracraft` -> `space.niliota.minekill`,
 mod id `minekill`, `MinekillClient`, `minekill.client.mixins.json`, mixin member prefix `minekill$`,
-C# namespace `Minekill` / assembly `Minekill.ULTRAKILL.dll`, BepInEx GUID `dev.minekill.ultrakill`,
+C# namespace `Minekill` / assembly `Minekill.ULTRAKILL.dll`, BepInEx GUID `space.niliota.minekill.ultrakill`,
 jar `minekill-minecraft`, bridge/stream files `/var/tmp/minekill.bridge` / `.stream`, env var
 `MINEKILL_BRIDGE`, log prefix `[MINEKILL]`. Display text says MINEKILL. The local Minecraft
 instance folder is still called `UltraCraft/` on disk, so paths to it and its .gitignore entry
@@ -3010,3 +3010,22 @@ has no placement preview), then push.
   PlayerSafety.reportWalkOff. The guard / rescue / verify logs stay (capped).
 - Also in this commit (from earlier rounds): GuiRendererMixin turns a zero-size scissor into 1x1
   (crash when scrolling video settings).
+
+## Release 0.1 (2026-10-23)
+
+The owner asked for a first GitHub release, version 0.1, with two files (the ULTRAKILL plugin and
+the Minecraft mod), a pass over the README and docs, and the Java package renamed after their
+domain (niliota.space).
+- Java package `dev.minekill` -> `space.niliota.minekill` (directory, mixin config package,
+  fabric.mod.json entrypoint, maven_group `space.niliota`, the protocol generator's Java output and
+  the layout check). The mod id stays `minekill`. The BepInEx plugin GUID (`dev.minekill.ultrakill`)
+  is unchanged.
+- The plugin DLL named its PDB by absolute path, which put the build machine's home directory in
+  every published DLL. The csproj now embeds the PDB (DebugType embedded), builds
+  deterministically and maps the project directory to `/_/` (PathMap).
+- Docs: README (Releases, what works incl. no fall-through and combat, Known limitations, the
+  fixed level-restart height note removed from Troubleshooting), HANDOVER (open issues, release),
+  CONTRACT (collision ownership and the known regions; Minecraft blocks solid for enemies; combat;
+  BLOCK_COLLISION and ENEMIES channels; SELECTION kind 2 no longer sent), LEGAL (Releases).
+- Earlier commit messages carried "(playtested)"; from now on there is no such label: only
+  builds the owner has played are committed.

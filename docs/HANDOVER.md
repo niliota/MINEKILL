@@ -4,7 +4,7 @@ The current state of the project and how the code is organised, for anyone (huma
 picking it up. Read this, then `CONTRACT.md`, before changing code. `MODLOG.md` has the full
 history with reasoning; search it for whatever you are about to touch.
 
-Last updated 2026-10-14.
+Last updated 2026-10-23 (release 0.1).
 
 ---
 
@@ -51,10 +51,17 @@ ULTRAKILL; no images cross.
 
 ## 4. Open issues and next steps
 
+Version 0.1 is released (GitHub release `v0.1.0`: the plugin DLL and the mod jar). The README's
+*Known limitations* is the player-facing version of this list.
+
 - **Combat balance:** combat is built (proxies, shields, armour, death/restart); Minecraft hits
   currently kill small ULTRAKILL enemies in one blow (1:1 damage). Tune with the owner.
 - Missing visuals: burning-entity flames, unifont glyphs (rare characters),
   GUI scissoring (long lists), interpolated animation frames.
+- Collision detail: mesh floors arrive rounded up to 1/8 block (standing up to 1/8 above them),
+  slopes are 1/8-block steps (a camera-only step smoothing was considered and shelved), signs on
+  ULTRAKILL walls can sit at the wrong depth. Mobs beyond 48 blocks (COLLISION_INTEREST range)
+  are held by EntitySafety.guard.
 - Native Windows: path and file-sharing support is in (`Platform.cs`, `Bridge.defaultPath`), never
   run.
 - Hide the Minecraft window (later, owner's call).
@@ -82,7 +89,7 @@ ultrakill-mod/src/              BepInEx plugin (net472, ULTRAKILL's Mono)
   SelfTest.cs                   layout self-check at handshake
   Protocol.cs                   GENERATED
 
-minecraft-mod/src/main/java/dev/minekill/   Fabric mod (Java 25)
+minecraft-mod/src/main/java/space/niliota/minekill/   Fabric mod (Java 25)
   MinekillClient.java           per-frame entry (from MinecraftMixin.runTick), liveness, wiring
   InputApplier.java             applies INPUT and events: keys, buttons, hotbar, cursor, screens
   PlayerPublisher.java          PLAYER, CAMERA, SELECTION
